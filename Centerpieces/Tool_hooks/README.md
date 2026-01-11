@@ -101,6 +101,10 @@ Centerpiece names start with the dimensions, roughly equivalent to inches as use
 
   Mount for the Porter Cable PCXMVC Charger with locking feature, used for all 20V tools from Porter Cable.  Combine with left/right [5x0 Flat Brackets](../../Sidepieces/Flats/), 6x [4x10x8mm Pins](../Spacer_blank_flush/4x10x8mm%20Pin.stl), and two [8mm Lock Pins](../../Centerpieces/Locking_spacer/8mm%20Lock%20Pin.stl) to keep it in place.
 
+* ### [Dual Ryobi Link Cleats](2x6%20Dual%20Ryobi%20Link%20Cleats.stl)
+
+  This mount allows two small Ryobi boxes - for example, the [22 piece Titanium Drill Set](https://www.homedepot.com/p/RYOBI-Titanium-Drill-Bit-Set-22-Piece-A972203/326243202) and the [52 piece Impact Driving Set](https://www.homedepot.com/p/RYOBI-Diamond-Grit-Driving-Set-52-Piece-A965201/326243033) (or any other small Ryobi boxes of this form factor) to be mounted side by side. Combine with Left/Right [2x0 Flat Brackets](../../Sidepieces/Flats/) to keep it in place.
+
 ---
 
 ## Printing notes
