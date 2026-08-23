@@ -139,9 +139,13 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const mesh = readStlFile(sourcePath)
       const sourceBytes = statSync(sourcePath).size
 
-      // Files with no grid dimensions in these folders are the fasteners the
-      // family needs, duplicated in from Accessories/. Index each one once.
-      const isFastener = parsed.h === null
+      // In most folders a file with no grid dimensions is a fastener that has
+      // been duplicated in from Accessories/. Quickhooks are the exception:
+      // every part there is dimensionless, so that family names its fasteners
+      // explicitly rather than inferring them from a failed parse.
+      const isFastener = family.dimensionless
+        ? ((family.fastenerFiles as string[] | undefined) ?? []).includes(parsed.filename)
+        : parsed.h === null
       const id = isFastener ? slug('fastener', parsed.filename) : slug(family.id as string, parsed.filename)
       if (isFastener && fasteners[parsed.filename]) continue
 

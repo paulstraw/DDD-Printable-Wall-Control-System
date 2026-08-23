@@ -9,12 +9,20 @@ const PLANNER_ROOT = join(import.meta.dirname, '..', '..', '..')
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DATA: any = JSON.parse(readFileSync(join(PLANNER_ROOT, 'data', 'families.json'), 'utf8'))
-/** Every part in a family directory that carries grid dimensions. */
-function partsIn(dir: string) {
-  return readdirSync(join(REPO_ROOT, dir))
+/**
+ * The placeable parts of a family. Normally that means every file carrying
+ * grid dimensions; for a dimensionless family it means every file that is not
+ * one of its named fasteners.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function partsIn(family: any) {
+  const fastenerFiles: string[] = family.fastenerFiles ?? []
+  return readdirSync(join(REPO_ROOT, family.dir))
     .filter((n) => /\.stl$/i.test(n))
     .map((n) => ({ name: n, parsed: parsePartName(n) }))
-    .filter((p) => p.parsed.h !== null)
+    .filter((p) =>
+      family.dimensionless ? !fastenerFiles.includes(p.parsed.filename) : p.parsed.h !== null,
+    )
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -115,7 +123,7 @@ describe('the file itself', () => {
 })
 
 describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
-  const parts = partsIn(family.dir)
+  const parts = partsIn(family)
 
   it('has the declared part count', () => {
     expect(parts).toHaveLength(family.parts)
@@ -125,6 +133,13 @@ describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
     if (family.perPart) return // no single rule; see the note in families.json
     for (const { name, parsed } of parts) {
       const h = parsed.h as number
+      if (family.dimensionless) {
+        // No h to key off; the height is simply constant.
+        const expected = predict(family.size.heightMm, 0) as number
+        expect(Math.abs(expected - sizeOf(family.dir, name).y), name)
+          .toBeLessThanOrEqual(HEIGHT_TOLERANCE_MM)
+        continue
+      }
       const measuredHeight = sizeOf(family.dir, name).y
 
       if (family.size.heightMm?.rule === 'slotSpan') {
@@ -142,7 +157,7 @@ describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
   })
 
   it('matches every size formula it declares', () => {
-    if (family.perPart) return
+    if (family.perPart || family.dimensionless) return
     const skip = new Set<string>(
       ((family.knownDeviations ?? []) as { part: string }[]).map((d) => d.part),
     )
@@ -184,6 +199,14 @@ describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
   })
 
   it('ships the fasteners it declares, and no others', () => {
+    if (family.dimensionless) {
+      // Named rather than inferred, so check the names point at real files.
+      const present = readdirSync(join(REPO_ROOT, family.dir)).map((f) => f.replace(/\.stl$/i, ''))
+      for (const f of (family.fastenerFiles ?? []) as string[]) {
+        expect(present, `${family.id} names ${f}`).toContain(f)
+      }
+      return
+    }
     const loose = readdirSync(join(REPO_ROOT, family.dir)).filter(
       (f) => /\.stl$/i.test(f) && parsePartName(f).h === null,
     )
@@ -194,28 +217,32 @@ describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
 })
 
 describe('sidepieces share one mounting interface', () => {
-  const sidepieces = FAMILIES.filter((f) => f.kind === 'sidepiece')
+  // The claim the archetype rests on. Scoped to families that inherit the
+  // interface rather than declaring their own: a Quickhook is a hook, not a
+  // side, and legitimately overrides tang and anchor. Selecting by "declares
+  // no anchor of its own" keeps that honest without naming names.
+  const raw = (DATA.families as Record<string, unknown>[]).filter(
+    (f) => f.archetype === 'sidepiece' && f.anchor === undefined,
+  )
+  const inheriting = FAMILIES.filter((f) => raw.some((r) => r.id === f.id))
 
-  it('covers more than one family', () => {
-    expect(sidepieces.length).toBeGreaterThan(1)
+  it('covers most of the sidepiece families', () => {
+    expect(inheriting.length).toBeGreaterThanOrEqual(7)
   })
 
   it('gives them all the same tang', () => {
-    // This is the claim the archetype rests on: the families differ in what
-    // they hold, never in how they hang.
-    const tangs = new Set(sidepieces.map((f) => JSON.stringify(f.anchor.tang)))
+    const tangs = new Set(inheriting.map((f) => JSON.stringify(f.anchor.tang)))
     expect(tangs.size).toBe(1)
   })
 
   it('gives them all the same anchor offsets', () => {
-    const anchors = new Set(sidepieces.map((f) => JSON.stringify(f.anchor.bottomBelowSlotCenterMm)))
+    const anchors = new Set(inheriting.map((f) => JSON.stringify(f.anchor.bottomBelowSlotCenterMm)))
     expect(anchors.size).toBe(1)
   })
 
   it('measures 13.7 mm thick for a side and 27.6 for a centre', () => {
-    for (const family of sidepieces) {
-      const parts = partsIn(family.dir)
-      for (const { name, parsed } of parts) {
+    for (const family of inheriting) {
+      for (const { name, parsed } of partsIn(family)) {
         if (parsed.variant !== 'left' && parsed.variant !== 'right') continue
         expect(sizeOf(family.dir, name).z, `${family.id} ${name}`).toBeCloseTo(13.7, 1)
       }

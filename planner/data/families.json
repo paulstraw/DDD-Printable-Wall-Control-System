@@ -37,6 +37,10 @@
     "8mm Lock Pin": {
       "path": "Accessories/8mm Lock Pin.stl",
       "note": "Locks a retainer or locking spacer in place."
+    },
+    "Quickhook Retainer": {
+      "path": "Accessories/Quickhook Retainer.stl",
+      "note": "Press-fits into a Quickhook body. Every hook needs one; the repo's own Quickhooks/README.md says so."
     }
   },
 
@@ -322,6 +326,38 @@
       },
       "tabs": { "present": true, "overhangPerSideMm": 2.7 },
       "fasteners": []
+    },
+    {
+      "id": "quickhooks",
+      "archetype": "sidepiece",
+      "dir": "Quickhooks",
+      "label": "Quickhook",
+      "parts": 9,
+      "dimensionless": true,
+      "dimensionlessNote": "Named by strength and length rather than grid units - `Quickhook 2in Medium`, not `2x0`. They carry no h or w, so they appear in the catalog without facet values, and this family lists its fasteners by name instead of inferring them from a failed dimension parse.",
+      "fastenerFiles": ["Quickhook Retainer", "Quickhook Lockable Retainer", "Quickhook Lock Peg"],
+
+      "printToWall": { "plain": { "x": "+z", "y": "+x", "z": "+y" } },
+      "printToWallNote": "The tang sits at print max.x and print z-min, which is the Flats Right arrangement exactly.",
+
+      "size": {
+        "heightMm": { "constant": 37.9 },
+        "thicknessMm": { "plain": 9.1 },
+        "depthMm": { "perUnitMm": 25.4, "constantMm": 13.0, "ofNamedInches": true }
+      },
+      "sizeNote": "Depth is 13.0 + 25.4 x the inches in the name, so a 1in hook is 38.4 deep and projects about 28.4 mm in front of the panel - roughly the inch it advertises, once the 10 mm behind the wall is taken off.",
+
+      "anchor": {
+        "tang": { "widthMm": 2.2, "heightMm": 34.9, "depthMm": 10.0, "atPrintFace": "z-min" },
+        "bottomBelowSlotCenterMm": { "odd": 17.55, "even": 17.55 },
+        "bottomBelowSlotCenterNote": "The 2.2 mm rear plate measures 34.9 mm tall - exactly a 1x0 Flat - and starts 3.0 mm above the bottom of the body. So a Quickhook hangs like a one-unit Flat (14.55) with 3.0 mm of body below it. There is no odd/even alternation because a Quickhook is always one unit.",
+        "bodyExtendsFromSlot": { "plain": "+x" }
+      },
+
+      "sockets": { "count": { "plain": 0 }, "countNote": "A Quickhook takes no centerpiece. It is a hook, not a side." },
+
+      "fasteners": [{ "id": "Quickhook Retainer", "quantity": 1 }],
+      "fastenersNote": "Two-part by design: the retainer press-fits into the hook body. The Lockable Retainer and Lock Peg are an alternative locking pair rather than an addition, so they are not counted here."
     },
     {
       "id": "centerpieces/tool_hooks",

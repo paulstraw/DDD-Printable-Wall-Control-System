@@ -137,12 +137,18 @@ describe('the indexer, end to end', () => {
   it('indexes every Phase-1 part and writes the assets it names', async () => {
     const { index, stats } = await runIndexer(out)
 
-    // Every dimensioned part in the library.
-    expect(index.parts).toHaveLength(532)
-    expect(index.families).toHaveLength(18)
+    // Every placeable part in the library.
+    expect(index.parts).toHaveLength(541)
+    expect(index.families).toHaveLength(19)
 
     // Fasteners duplicated into family folders are fasteners, not parts.
-    expect(Object.keys(index.fasteners).sort()).toEqual(['4x10x8mm Pin', '8mm Lock Pin'])
+    expect(Object.keys(index.fasteners).sort()).toEqual([
+      '4x10x8mm Pin',
+      '8mm Lock Pin',
+      'Quickhook Lock Peg',
+      'Quickhook Lockable Retainer',
+      'Quickhook Retainer',
+    ])
     expect(index.parts.some((p) => /pin/i.test(p.name))).toBe(false)
 
     for (const part of index.parts) {
@@ -213,8 +219,15 @@ describe('the indexer, end to end', () => {
 
   it('gives a centerpiece the columns it spans and a sidepiece one', async () => {
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const kindOf = new Map(
+      (index.families as { id: string; kind: string }[]).map((f) => [f.id, f.kind]),
+    )
     for (const part of index.parts) {
-      const expected = part.family.startsWith('sidepieces/') ? 1 : Math.round(part.w)
+      // A sidepiece hangs on one slot; a centerpiece spans the columns it is
+      // named for, but never fewer than one — `2x0 Retainer` is named zero
+      // wide and still occupies a column.
+      const expected =
+        kindOf.get(part.family) === 'sidepiece' ? 1 : Math.max(1, Math.round(part.w))
       expect(part.placement.occupiesColumns, part.name).toBe(expected)
     }
   })
