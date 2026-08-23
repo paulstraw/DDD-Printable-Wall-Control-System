@@ -1,0 +1,135 @@
+{
+  "$schemaVersion": 1,
+  "$comment": [
+    "Per-family placement rules. Every number here was measured off the STLs with",
+    "packages/indexer/src/stl.ts, not taken from a drawing — see the sibling test",
+    "packages/indexer/test/families.test.ts, which re-derives each one from the",
+    "meshes on every run. Phase 1 covers three families; Phase 2 adds the rest.",
+    "Per-part corrections go in overrides.json, never here."
+  ],
+
+  "conventions": {
+    "units": "millimetres",
+    "wallAxes": {
+      "x": "along the wall, increasing to the right",
+      "y": "out of the wall; the panel's front face is y = 0 and parts occupy y > 0",
+      "z": "up"
+    },
+    "printAxes": "whatever SketchUp exported. Each family declares its own mapping.",
+    "printToWall": "wall axis = signed print axis, e.g. y: \"+x\" means wallY = printX. Every mapping is a proper rotation (determinant +1); mirrored variants ship as separate meshes.",
+    "recentre": "STL origins are arbitrary. Translate by -bbox.min before applying any rule."
+  },
+
+  "fasteners": {
+    "4x10x8mm Pin": {
+      "path": "Accessories/4x10x8mm Pin.stl",
+      "note": "Joins a tabless centerpiece to its sidepieces. Also duplicated into the folders of the families that need it."
+    }
+  },
+
+  "families": [
+    {
+      "id": "sidepieces/flats",
+      "dir": "Sidepieces/Flats",
+      "kind": "sidepiece",
+      "label": "Flat",
+      "dimensionOrder": "height x depth",
+      "parts": 24,
+
+      "printToWall": {
+        "left":   { "x": "+z", "y": "+x", "z": "+y" },
+        "center": { "x": "+z", "y": "+x", "z": "+y" },
+        "right":  { "x": "-z", "y": "-x", "z": "+y" }
+      },
+      "printToWallNote": "Left and Right are mirror images in the print depth axis: Left carries its 2.2 mm tang at min.x, Right at max.x. Right is therefore Left yawed 180 degrees about wall Z, which is why both meshes exist rather than one being reused.",
+
+      "size": {
+        "heightMm": { "rule": "slotSpan", "slotsEngaged": "ceil(h/2)", "lipOddMm": 9.5, "lipEvenMm": 31.8 },
+        "depthMm": { "constant": 18.7 },
+        "thicknessMm": { "left": 13.7, "right": 13.7, "center": 27.6 }
+      },
+
+      "anchor": {
+        "occupiesSlotColumns": 1,
+        "slotsEngaged": "ceil(h/2)",
+        "slotPitchMm": 50.8,
+        "tang": { "widthMm": 2.2, "heightMm": 20.3, "atPrintFace": "z-min" },
+        "bottomBelowSlotCenterMm": { "odd": 14.55, "even": 36.85 },
+        "bottomBelowSlotCenterNote": "Places the tang band centred in its 25.4 mm slot. The odd/even difference is 22.3 mm, the same alternation that generates the Flats height series - two independent derivations agreeing. Registration is centre-aligned; if the spike check shows the part hangs off the slot's lower edge instead, both numbers drop by 2.55.",
+        "bodyExtendsFromSlot": { "left": "+x", "right": "-x", "center": "+x" }
+      },
+
+      "sockets": {
+        "count": { "left": 1, "right": 1, "center": 2 },
+        "countNote": "Keyed off the Center token: a Center sidepiece is 27.6 mm thick against 13.7 and takes a centerpiece on both faces.",
+        "acceptsHeightUnits": "same h as the sidepiece",
+        "centerpieceTopBelowSidepieceTopMm": 6.6,
+        "verticalNote": "Measured across all eight Flats sizes: the socket band's span equals the matching centerpiece's height exactly, and the gap to the top of the sidepiece is 6.6 mm at every size. Anchoring from the top is uniform; from the bottom it alternates 3.1 / 0.0 with parity."
+      },
+
+      "fasteners": []
+    },
+
+    {
+      "id": "centerpieces/spacer_blank",
+      "dir": "Centerpieces/Spacer_blank",
+      "kind": "centerpiece",
+      "label": "Spacer blank",
+      "dimensionOrder": "height x width",
+      "parts": 28,
+
+      "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
+
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
+        "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 },
+        "thicknessMm": { "constant": 6.15 }
+      },
+
+      "anchor": {
+        "spansSlotColumns": "w",
+        "bottomBelowSlotCenterMm": { "odd": 11.45, "even": 36.85 },
+        "bottomBelowSlotCenterNote": "Derived from the sidepiece anchor plus the measured 6.6 mm top gap, then checked to be independent of h."
+      },
+
+      "tabs": {
+        "present": true,
+        "overhangPerSideMm": 2.7,
+        "heightMm": 60.6,
+        "note": "Width is 25.4w + 5.4: the body spans exactly w slot columns and each tab reaches 2.7 mm past the slot centre into the sidepiece's socket."
+      },
+
+      "fasteners": []
+    },
+
+    {
+      "id": "centerpieces/spacer_clip-on",
+      "dir": "Centerpieces/Spacer_clip-on",
+      "kind": "centerpiece",
+      "label": "Spacer clip-on",
+      "dimensionOrder": "height x width",
+      "parts": 12,
+
+      "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
+
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": -2.4 },
+        "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 },
+        "thicknessMm": { "constant": 8.6 }
+      },
+
+      "anchor": {
+        "spansSlotColumns": "w",
+        "bottomBelowSlotCenterMm": { "odd": 11.45, "even": 36.85 }
+      },
+
+      "tabs": {
+        "present": false,
+        "clearancePerSideMm": 1.2,
+        "note": "Width is 25.4w - 2.4, so it clears the slot columns by 1.2 mm a side instead of overlapping them. No tabs is exactly why this family needs pins."
+      },
+
+      "fasteners": [{ "id": "4x10x8mm Pin", "quantity": 4 }]
+    }
+  ]
+}
