@@ -2,52 +2,57 @@
  * Mesh to compressed glTF.
  *
  * STL has no shared vertices — every triangle carries its own three — so the
- * first real win is welding. These are mechanical parts with hard edges, so
- * normals are per-face: coplanar neighbours merge, edges stay crisp, and the
- * renderer needs no smoothing pass.
+ * first real win is welding.
  *
- * After welding: quantize, then EXT_meshopt_compression.
+ * These assets carry **no normals**, and that is the single most important
+ * decision in this file. Baking per-face normals keeps hard edges crisp
+ * without any help from the renderer, but it splits every vertex three ways:
+ * a 188k-triangle spacer needs 549,712 vertices with them and 94,076 without.
+ * Worse, the split reads as a seam at every edge, so the simplifier cannot
+ * collapse anything at all — measured, it removed exactly zero triangles.
+ *
+ * Dropping normals costs nothing visually, because the app flat-shades these
+ * materials and derives the same hard edges in the shader. It buys a 3.5x
+ * smaller file for identical geometry, and it makes simplification work.
+ *
+ * So: weld, simplify anything heavy, quantize, EXT_meshopt_compression.
  */
 
 import { Document, Logger, NodeIO } from '@gltf-transform/core'
 import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions'
-import { quantize, weld } from '@gltf-transform/functions'
-import { MeshoptEncoder } from 'meshoptimizer'
+import { quantize, simplify, weld } from '@gltf-transform/functions'
+import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
 
-/** Per-face normals, one per vertex, matching the STL's flat topology. */
-export function faceNormals(positions: Float32Array): Float32Array<ArrayBuffer> {
-  const normals = new Float32Array(positions.length)
-  for (let i = 0; i < positions.length; i += 9) {
-    const ax = positions[i]!, ay = positions[i + 1]!, az = positions[i + 2]!
-    const bx = positions[i + 3]!, by = positions[i + 4]!, bz = positions[i + 5]!
-    const cx = positions[i + 6]!, cy = positions[i + 7]!, cz = positions[i + 8]!
+/**
+ * Below this, a mesh is already small enough that simplifying it saves
+ * nothing worth the risk of moving a face. Roughly 90% of the library is
+ * under it — the cost is concentrated in a few dozen over-tessellated parts.
+ */
+export const SIMPLIFY_ABOVE_TRIANGLES = 20_000
 
-    const ux = bx - ax, uy = by - ay, uz = bz - az
-    const vx = cx - ax, vy = cy - ay, vz = cz - az
+/**
+ * Error budget, as a fraction of the mesh's own size. These are mechanical
+ * parts, so the bar is that a hole stays a hole and an edge stays where it
+ * was; 0.1% of extent is well inside print tolerance and invisible at the
+ * scale a planner draws them. The STL a user downloads is untouched either
+ * way — this only affects the preview.
+ */
+export const SIMPLIFY_ERROR = 0.001
 
-    let nx = uy * vz - uz * vy
-    let ny = uz * vx - ux * vz
-    let nz = ux * vy - uy * vx
-    const len = Math.hypot(nx, ny, nz)
-    if (len > 0) {
-      nx /= len
-      ny /= len
-      nz /= len
-    }
-    for (let v = 0; v < 3; v++) {
-      normals[i + v * 3] = nx
-      normals[i + v * 3 + 1] = ny
-      normals[i + v * 3 + 2] = nz
-    }
-  }
-  return normals
-}
+/**
+ * Keep a quarter of the triangles. Deliberately conservative: the saving is
+ * already an order of magnitude at this ratio, and a preview that quietly
+ * turns a hole into a hexagon would be worse than a larger file. The STL a
+ * user downloads is the original either way.
+ */
+export const SIMPLIFY_RATIO = 0.25
 
 let io: NodeIO | null = null
 
 async function writer(): Promise<NodeIO> {
   if (io) return io
   await MeshoptEncoder.ready
+  await MeshoptSimplifier.ready
   io = new NodeIO()
     .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
     .registerDependencies({ 'meshopt.encoder': MeshoptEncoder })
@@ -57,7 +62,10 @@ async function writer(): Promise<NodeIO> {
 export interface GlbResult {
   readonly bytes: Uint8Array
   readonly vertexCount: number
+  /** Triangles in the source STL. */
   readonly triangleCount: number
+  /** Triangles in the glTF that ships, which may be fewer. */
+  readonly renderedTriangleCount: number
 }
 
 /**
@@ -87,32 +95,37 @@ export async function meshToGlb(
     .setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })
 
   const buffer = document.createBuffer()
-  // Copy into ArrayBuffer-backed arrays: glTF accessors will not take the
+  // Copy into an ArrayBuffer-backed array: glTF accessors will not take the
   // ArrayBufferLike-backed views a SharedArrayBuffer could produce.
   const position = document
     .createAccessor('POSITION')
     .setType('VEC3')
     .setArray(new Float32Array(placed))
     .setBuffer(buffer)
-  const normal = document
-    .createAccessor('NORMAL')
-    .setType('VEC3')
-    .setArray(faceNormals(placed))
-    .setBuffer(buffer)
 
   const material = document.createMaterial(name).setBaseColorFactor([0.72, 0.74, 0.78, 1]).setMetallicFactor(0).setRoughnessFactor(0.85)
-  const primitive = document.createPrimitive().setAttribute('POSITION', position).setAttribute('NORMAL', normal).setMaterial(material)
+  const primitive = document.createPrimitive().setAttribute('POSITION', position).setMaterial(material)
   const mesh = document.createMesh(name).addPrimitive(primitive)
   const node = document.createNode(name).setMesh(mesh)
   document.createScene().addChild(node)
 
-  await document.transform(weld(), quantize({ quantizePosition: 14, quantizeNormal: 10 }))
+  const triangleCount = positions.length / 9
+  await document.transform(
+    weld(),
+    ...(triangleCount > SIMPLIFY_ABOVE_TRIANGLES
+      ? [simplify({ simplifier: MeshoptSimplifier, ratio: SIMPLIFY_RATIO, error: SIMPLIFY_ERROR })]
+      : []),
+    quantize({ quantizePosition: 14, quantizeNormal: 10 }),
+  )
 
   const bytes = await (await writer()).writeBinary(document)
-  const welded = document.getRoot().listMeshes()[0]?.listPrimitives()[0]
+  const finished = document.getRoot().listMeshes()[0]?.listPrimitives()[0]
+  const indices = finished?.getIndices()?.getCount()
   return {
     bytes,
-    vertexCount: welded?.getAttribute('POSITION')?.getCount() ?? 0,
-    triangleCount: positions.length / 9,
+    vertexCount: finished?.getAttribute('POSITION')?.getCount() ?? 0,
+    triangleCount,
+    // What actually ships, after any simplification.
+    renderedTriangleCount: indices !== undefined ? indices / 3 : triangleCount,
   }
 }

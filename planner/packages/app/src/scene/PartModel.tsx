@@ -27,7 +27,14 @@ function Model({ part, selected }: { part: CatalogPart; selected: boolean }) {
       const material = (mesh.material as { clone: () => unknown }).clone() as {
         color?: { set: (c: string) => void }
         emissive?: { set: (c: string) => void }
+        flatShading?: boolean
+        needsUpdate?: boolean
       }
+      // The assets carry no normals — see indexer/src/gltf.ts. Flat shading
+      // derives them per face in the shader, which is the look these parts
+      // want anyway, and is why dropping the attribute costs nothing.
+      material.flatShading = true
+      material.needsUpdate = true
       if (selected) {
         material.color?.set('#f0a35e')
         material.emissive?.set('#2a1400')

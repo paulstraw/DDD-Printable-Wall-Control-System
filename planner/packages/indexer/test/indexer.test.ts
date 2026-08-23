@@ -7,7 +7,7 @@ import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/exte
 import { MeshoptDecoder } from 'meshoptimizer'
 import { REPO_ROOT } from '../src/assembly'
 import { runIndexer } from '../src/catalog'
-import { faceNormals, meshToGlb } from '../src/gltf'
+import { SIMPLIFY_ABOVE_TRIANGLES, meshToGlb } from '../src/gltf'
 import { renderRgba } from '../src/thumbnail'
 
 /** A closed unit cube, 12 triangles, unshared vertices as STL gives them. */
@@ -22,42 +22,19 @@ const CUBE = new Float32Array(
   ].flat(),
 )
 
-describe('faceNormals', () => {
-  it('gives every vertex of a triangle the same unit normal', () => {
-    const n = faceNormals(CUBE)
-    expect(n).toHaveLength(CUBE.length)
-    for (let i = 0; i < n.length; i += 9) {
-      const [x, y, z] = [n[i]!, n[i + 1]!, n[i + 2]!]
-      expect(Math.hypot(x, y, z)).toBeCloseTo(1, 5)
-      // All three vertices of the face share it — flat shading, hard edges.
-      expect(n[i + 3]).toBeCloseTo(x, 6)
-      expect(n[i + 6]).toBeCloseTo(x, 6)
-    }
-  })
-
-  it('produces axis-aligned normals for an axis-aligned box', () => {
-    const n = faceNormals(CUBE)
-    for (let i = 0; i < n.length; i += 3) {
-      const axes = [Math.abs(n[i]!), Math.abs(n[i + 1]!), Math.abs(n[i + 2]!)].sort()
-      expect(axes[2]).toBeCloseTo(1, 5)
-      expect(axes[1]).toBeCloseTo(0, 5)
-    }
-  })
-
-  it('leaves a degenerate triangle at zero rather than dividing by zero', () => {
-    const degenerate = new Float32Array([0, 0, 0, 1, 1, 1, 2, 2, 2])
-    const n = faceNormals(degenerate)
-    expect([...n].every(Number.isFinite)).toBe(true)
-  })
-})
-
 describe('meshToGlb', () => {
-  it('welds the unshared STL vertices', async () => {
+  it('welds the unshared STL vertices down to the corners', async () => {
     const glb = await meshToGlb(CUBE, 'cube')
     expect(glb.triangleCount).toBe(12)
-    // 36 unshared vertices collapse to 24: one per corner per face normal.
-    expect(glb.vertexCount).toBe(24)
+    // With no normals to keep them apart, 36 unshared vertices collapse all
+    // the way to the cube's 8 corners. With per-face normals it was 24.
+    expect(glb.vertexCount).toBe(8)
     expect(glb.bytes.byteLength).toBeGreaterThan(0)
+  })
+
+  it('leaves a small mesh untouched by the simplifier', async () => {
+    const glb = await meshToGlb(CUBE, 'cube')
+    expect(glb.renderedTriangleCount).toBe(glb.triangleCount)
   })
 
   it('writes a glTF that reads back with the same geometry', async () => {
@@ -71,7 +48,9 @@ describe('meshToGlb', () => {
     const node = document.getRoot().listNodes()[0]!
     const prim = node.getMesh()!.listPrimitives()[0]!
     expect(prim.getIndices()!.getCount()).toBe(36)
-    expect(prim.getAttribute('NORMAL')).not.toBeNull()
+    // Deliberately no normals: they would split every vertex three ways and
+    // block simplification. The app flat-shades instead.
+    expect(prim.getAttribute('NORMAL')).toBeNull()
 
     // Quantization scales into [-1,1] and puts the size on the node, so the
     // world extent is what has to survive, not the raw accessor values.
@@ -176,6 +155,36 @@ describe('the indexer, end to end', () => {
       expect(part.id, part.name).toMatch(/^[a-z0-9-]+$/)
       expect(ids.has(part.id), `duplicate id ${part.id}`).toBe(false)
       ids.add(part.id)
+    }
+  })
+
+  it('simplifies the heavy meshes and leaves the rest alone', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const simplified = index.parts.filter(
+      (p: { renderedTriangles: number; triangles: number }) => p.renderedTriangles < p.triangles,
+    )
+
+    // A few dozen over-tessellated parts carry most of the bytes; the rest of
+    // the library is already small.
+    expect(simplified.length).toBeGreaterThan(20)
+    expect(simplified.length).toBeLessThan(index.parts.length / 2)
+
+    for (const part of index.parts) {
+      // Simplifying can only remove triangles.
+      expect(part.renderedTriangles, part.name).toBeLessThanOrEqual(part.triangles)
+      expect(part.renderedTriangles, part.name).toBeGreaterThan(0)
+      // And only meshes above the threshold are touched at all.
+      if (part.triangles <= SIMPLIFY_ABOVE_TRIANGLES) {
+        expect(part.renderedTriangles, part.name).toBe(part.triangles)
+      }
+    }
+  })
+
+  it('keeps every model comfortably under what Pages will serve', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    for (const part of index.parts) {
+      const bytes = statSync(join(out, part.model)).size
+      expect(bytes, `${part.name} is ${(bytes / 1024).toFixed(0)} kB`).toBeLessThan(1024 * 1024)
     }
   })
 

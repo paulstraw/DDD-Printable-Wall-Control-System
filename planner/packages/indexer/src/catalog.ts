@@ -43,7 +43,10 @@ export interface PartRow {
   h: number | null
   w: number | null
   searchKey: string
+  /** Triangles in the source STL. */
   triangles: number
+  /** Triangles in the glTF that ships — fewer when the mesh was simplified. */
+  renderedTriangles: number
   vertices: number
   volumeMm3: number
   /** Set when the filename disagreed with the model and was corrected. */
@@ -246,6 +249,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         w: parsed.w,
         searchKey: parsed.searchKey,
         triangles: glb.triangleCount,
+        renderedTriangles: glb.renderedTriangleCount,
         vertices: glb.vertexCount,
         volumeMm3: Number(mesh.volumeMm3.toFixed(2)),
         sourceBytes,
