@@ -71,8 +71,6 @@ function socketBand(file: string, xLo: number, xHi: number) {
   return { lo, hi, height: b.size.y }
 }
 
-const TOL = 0.05
-
 describe('conventions', () => {
   it('declares a proper rotation for every family and variant', () => {
     const maps: AxisMap[] = []
@@ -125,6 +123,34 @@ describe('Sidepieces/Flats', () => {
       const variant = parsed.variant as 'left' | 'right' | 'center'
       expect(bbox.size.z, name).toBeCloseTo(rule.size.thicknessMm[variant], 1)
     }
+  })
+
+  it('reaches behind the wall by the declared tang depth', () => {
+    // Walk out along print X and find where the section stops being as thin
+    // as the slot. Testing triangles individually will not do it: the part's
+    // flat z = 0 face is thin everywhere and runs the whole depth.
+    const mesh = readStlFile(join(REPO_ROOT, rule.dir, '3x0 Flat Left.stl'))
+    const p = mesh.positions
+    const b = mesh.bbox
+    const BIN = 0.5
+    const bins = Math.ceil(b.size.x / BIN)
+    const thickest = new Array<number>(bins).fill(0)
+
+    for (let i = 0; i < p.length; i += 9) {
+      const xs = [p[i]!, p[i + 3]!, p[i + 6]!].map((v) => v - b.min.x)
+      const zs = [p[i + 2]!, p[i + 5]!, p[i + 8]!].map((v) => v - b.min.z)
+      const hi = Math.max(...zs)
+      const from = Math.max(0, Math.floor(Math.min(...xs) / BIN))
+      const to = Math.min(bins - 1, Math.floor(Math.max(...xs) / BIN))
+      for (let k = from; k <= to; k++) thickest[k] = Math.max(thickest[k]!, hi)
+    }
+
+    let depth = 0
+    for (let k = 0; k < bins; k++) {
+      if (thickest[k]! > rule.anchor.tang.widthMm + 0.1) break
+      depth = (k + 1) * BIN
+    }
+    expect(depth).toBeCloseTo(rule.anchor.tang.depthMm, 0)
   })
 
   it('carries its tang on the print face the rule claims', () => {

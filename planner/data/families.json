@@ -17,7 +17,8 @@
     },
     "printAxes": "whatever SketchUp exported. Each family declares its own mapping.",
     "printToWall": "wall axis = signed print axis, e.g. y: \"+x\" means wallY = printX. Every mapping is a proper rotation (determinant +1); mirrored variants ship as separate meshes.",
-    "recentre": "STL origins are arbitrary. Translate by -bbox.min before applying any rule."
+    "recentre": "STL origins are arbitrary. Translate by -bbox.min before applying any rule.",
+    "depthDatum": "Sidepieces sit with their tang behind the wall face (wall Y from -tang.depthMm). Centerpieces sit flush against it, wall Y from 0."
   },
 
   "fasteners": {
@@ -53,7 +54,8 @@
         "occupiesSlotColumns": 1,
         "slotsEngaged": "ceil(h/2)",
         "slotPitchMm": 50.8,
-        "tang": { "widthMm": 2.2, "heightMm": 20.3, "atPrintFace": "z-min" },
+        "tang": { "widthMm": 2.2, "heightMm": 20.3, "depthMm": 8.5, "atPrintFace": "z-min" },
+        "tangDepthNote": "How far the tang reaches behind the wall face. Measured as the print-X run over which the section is only slot-width thick: 0 to 8.5 mm, widening to the full 13.7 mm body by x = 10. The body's bearing face is therefore the wall plane, and the part occupies wall Y from -8.5 to +10.2.",
         "bottomBelowSlotCenterMm": { "odd": 14.55, "even": 36.85 },
         "bottomBelowSlotCenterNote": "Places the tang band centred in its 25.4 mm slot. The odd/even difference is 22.3 mm, the same alternation that generates the Flats height series - two independent derivations agreeing. Registration is centre-aligned; if the spike check shows the part hangs off the slot's lower edge instead, both numbers drop by 2.55.",
         "bodyExtendsFromSlot": { "left": "+x", "right": "-x", "center": "+x" }
