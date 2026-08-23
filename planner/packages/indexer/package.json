@@ -1,0 +1,21 @@
+{
+  "name": "@ddd-planner/indexer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Node build step: reads the repo's STLs, emits glTF, thumbnails and index.json.",
+  "bin": {
+    "ddd-index": "./src/cli.ts"
+  },
+  "scripts": {
+    "index": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ddd-planner/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.4"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Generated assets — CI builds these, they are never committed.
+packages/app/public/parts/
+packages/indexer/out/
+*.glb
+*.gltf
+*.webp
+index.json
