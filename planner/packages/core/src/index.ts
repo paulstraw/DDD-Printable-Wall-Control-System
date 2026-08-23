@@ -9,3 +9,4 @@
 export const CORE_PACKAGE = '@ddd-planner/core'
 
 export * from './grid'
+export * from './names'
