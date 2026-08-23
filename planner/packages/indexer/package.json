@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "spike": "tsx src/spike.ts"
+    "spike": "tsx src/spike.ts",
+    "audit": "tsx src/audit-cli.ts"
   },
   "dependencies": {
     "@ddd-planner/core": "*",

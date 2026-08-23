@@ -68,6 +68,31 @@ export function resolvedFamilies(): FamilyRule[] {
   return file.families.map((f) => resolveFamily(f, file.archetypes ?? {}))
 }
 
+export interface PartOverride {
+  readonly name: string
+  readonly h?: number
+  readonly w?: number
+  readonly reason: string
+}
+
+let overrides: Map<string, PartOverride> | null = null
+
+/**
+ * Per-part corrections, keyed by filename without extension.
+ *
+ * Only for parts whose name disagrees with their model in a way confirmed in
+ * two dimensions — see data/overrides.json for why that bar matters.
+ */
+export function loadOverrides(): Map<string, PartOverride> {
+  if (!overrides) {
+    const file = JSON.parse(
+      readFileSync(join(PLANNER_ROOT, 'data', 'overrides.json'), 'utf8'),
+    ) as { parts: PartOverride[] }
+    overrides = new Map(file.parts.map((p) => [p.name, p]))
+  }
+  return overrides
+}
+
 export function ruleFor(id: string): FamilyRule {
   const found = resolvedFamilies().find((f) => f.id === id)
   if (!found) throw new Error(`no family rule for ${id}`)

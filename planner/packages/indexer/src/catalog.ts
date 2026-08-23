@@ -18,7 +18,7 @@ import {
   parsePartName,
   placeBounds,
 } from '@ddd-planner/core'
-import { PLANNER_ROOT, REPO_ROOT, loadFamilies, resolvedFamilies } from './assembly'
+import { PLANNER_ROOT, REPO_ROOT, loadFamilies, loadOverrides, resolvedFamilies } from './assembly'
 import { meshToGlb } from './gltf'
 import { readStlFile } from './stl'
 import { renderWebp } from './thumbnail'
@@ -46,6 +46,8 @@ export interface PartRow {
   triangles: number
   vertices: number
   volumeMm3: number
+  /** Set when the filename disagreed with the model and was corrected. */
+  correction?: string
   /** Size of the source STL, so the app can estimate a download before starting. */
   sourceBytes: number
   sizeMm: { x: number; y: number; z: number }
@@ -150,6 +152,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
   const started = Date.now()
   const families = resolvedFamilies()
   const unsupportedRules = (loadFamilies() as unknown as { unsupported?: UnsupportedRule[] }).unsupported ?? []
+  const overrides = loadOverrides()
 
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(join(outDir, 'models'), { recursive: true })
@@ -168,7 +171,13 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
     const files = readdirSync(join(REPO_ROOT, dir)).filter((f) => /\.stl$/i.test(f)).sort()
 
     for (const file of files) {
-      const parsed = parsePartName(file)
+      const named = parsePartName(file)
+      // A correction replaces the dimensions the filename claims, before any
+      // of them reach placement or the catalog facets.
+      const fix = overrides.get(named.filename)
+      const parsed = fix
+        ? { ...named, h: fix.h ?? named.h, w: fix.w ?? named.w }
+        : named
       const sourcePath = join(REPO_ROOT, dir, file)
       const mesh = readStlFile(sourcePath)
       const sourceBytes = statSync(sourcePath).size
@@ -248,6 +257,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         model,
         thumb,
         fasteners: fastenersFor(family, parsed.filename),
+        ...(fix ? { correction: fix.reason } : {}),
         supported: unsupportedReasonFor(unsupportedRules, parsed.filename) === undefined,
         ...(unsupportedReasonFor(unsupportedRules, parsed.filename) !== undefined
           ? { unsupportedReason: unsupportedReasonFor(unsupportedRules, parsed.filename) }

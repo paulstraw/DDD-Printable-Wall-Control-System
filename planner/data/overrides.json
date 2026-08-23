@@ -1,0 +1,87 @@
+{
+  "$schemaVersion": 1,
+  "$comment": [
+    "Per-part corrections, for parts whose filename disagrees with their model.",
+    "",
+    "Every entry here was found by packages/indexer/src/audit.ts and confirmed",
+    "in two dimensions: a correction is only made when the measured height",
+    "matches one unit count *and* the measured width independently matches",
+    "another. A height that merely looks wrong is not enough, because a bbox",
+    "can legitimately exceed the mounting plate — see `perPart` in families.json.",
+    "",
+    "Ten of 541 parts, all in the community-contributed Tool_hooks. The",
+    "seventeen curated families audit clean, which is the strongest evidence",
+    "yet that the parametric model holds."
+  ],
+
+  "parts": [
+    {
+      "name": "1x2 ChannelLock 926 6in Snap Ring Pliers",
+      "h": 2,
+      "w": 1,
+      "reason": "transposed: measures 50.6 tall (h=2) and 30.8 wide (w=1)"
+    },
+    {
+      "name": "2x1 AECCN 8-in-1 Ratcheting Stubby Screwdriver FO-6009X",
+      "h": 1,
+      "w": 2,
+      "reason": "transposed: measures 25.2 tall (h=1) and 48.6 wide (w=2)"
+    },
+    {
+      "name": "2x1 Dremel GO-01",
+      "h": 1,
+      "w": 2,
+      "reason": "transposed: measures 25.3 tall (h=1) and 56.2 wide (w=2)"
+    },
+    {
+      "name": "3x4 Slatwall Adapter",
+      "h": 4,
+      "w": 3,
+      "reason": "transposed: measures 101.2 tall (h=4) and 81.6 wide (w=3)"
+    },
+    {
+      "name": "3x4 Slatwall Adapter Flush",
+      "h": 4,
+      "w": 3,
+      "reason": "transposed: measures 101.2 tall (h=4) and 73.8 wide (w=3)"
+    },
+    {
+      "name": "6x4 RD6006P_Power_Supply",
+      "h": 4,
+      "w": 7,
+      "reason": "both wrong: measures 101.4 tall (h=4) and 183.2 wide (w=7)"
+    },
+    {
+      "name": "3x1 Halder Secural",
+      "h": 2,
+      "w": 3,
+      "reason": "both wrong: measures 50.6 tall (h=2) and 81.6 wide (w=3)"
+    },
+    {
+      "name": "1x3 Dewalt DCV501 Stick Vacuum",
+      "h": 2,
+      "reason": "measures 50.6 tall (h=2); the width of 73.8 already agrees with w=3"
+    },
+    {
+      "name": "2x3 6x 6mm Finger Slots",
+      "h": 1,
+      "reason": "measures 25.2 tall (h=1); the width of 81.6 already agrees with w=3"
+    },
+    {
+      "name": "2x6 12x 6mm Finger Slots",
+      "h": 1,
+      "reason": "measures 25.2 tall (h=1); the width of 157.8 already agrees with w=6"
+    }
+  ],
+
+  "notCorrected": [
+    {
+      "name": "8x2.25 LiitoKala Charger",
+      "reason": "Width 208.6 agrees with w=8, but the height of 57.0 fits no whole unit count - the nearest, h=2, is 6.4 mm out. Its name is probably height x width reversed with a fractional height, which the grid has no way to express. Left alone rather than guessed at."
+    },
+    {
+      "name": "1x6 11pc Wrench Hanger",
+      "reason": "Measures 159.1 tall against 25.2 for h=1, and Tool_hooks/README.md says to print it with 6x0 Flats. But the excess is the eleven downward hooks, not a wrong name - the bounding box exceeds the mounting plate. That is the `perPart` problem, not an override."
+    }
+  ]
+}
