@@ -259,3 +259,142 @@ canvas {
   color: var(--muted);
   flex: none;
 }
+
+/* ------------------------------------------------------------------- bom */
+
+.bom {
+  width: 17.5rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--bar);
+  border-left: 1px solid var(--line);
+  min-height: 0;
+}
+
+.bom-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.bom-head h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  flex: 1;
+}
+
+.bom-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.copy {
+  font: inherit;
+  font-size: 0.7rem;
+  padding: 0.16rem 0.44rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--ink);
+  border-color: #b9c0c9;
+}
+
+.bom-empty,
+.bom-note {
+  margin: 0;
+  padding: 0.7rem;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.bom-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* A flex row rather than a table: the name is the only part that reflows,
+   and the two numeric columns keep a fixed width whatever it does. */
+.bom-line {
+  display: flex;
+  /* The row must take the panel's width, not its own content's. Without this
+     it sizes to min-content and pushes the gram column past the edge. */
+  width: 100%;
+  box-sizing: border-box;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.34rem 0.6rem;
+  font-size: 0.76rem;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.bom-line .qty {
+  flex: none;
+  width: 1.9rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.bom-line .name {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+  /* `anywhere`, not `break-word`: only `anywhere` lets a flex item shrink
+     below its min-content width, which is what keeps a long part name from
+     shoving the gram column off the panel. In the table this was the wrong
+     choice for exactly the same reason — there it collapsed the column. */
+  overflow-wrap: anywhere;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a7150;
+  background: #fbf3e6;
+  border-radius: 3px;
+  padding: 0.02rem 0.26rem;
+  white-space: nowrap;
+}
+
+.bom-line .grams {
+  flex: none;
+  width: 3.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.bom-line.fastener .name {
+  color: var(--muted);
+}
+
+.bom-line.total {
+  font-weight: 650;
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+
+.bom-line.total .qty,
+.bom-line.total .grams {
+  color: var(--ink);
+}
+

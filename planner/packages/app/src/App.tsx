@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { slotColumnCount, slotRowCount } from '@ddd-planner/core'
+import { BomPanel } from './bom/BomPanel'
 import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
@@ -58,6 +59,7 @@ export function App() {
             <Scene board={board} />
           </Canvas>
         </div>
+        <BomPanel />
       </div>
     </div>
   )

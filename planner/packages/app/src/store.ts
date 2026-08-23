@@ -24,7 +24,7 @@ export interface CatalogPart {
 export interface CatalogFile {
   schemaVersion: number
   families: { id: string; label: string; kind: string; dir: string }[]
-  fasteners: Record<string, { id: string; file: string; model: string; thumb: string }>
+  fasteners: Record<string, { id: string; file: string; model: string; thumb: string; volumeMm3: number }>
   parts: CatalogPart[]
 }
 
