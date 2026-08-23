@@ -12,14 +12,15 @@ import {
   placeBounds,
   rotateBounds,
   rotationMatrix,
+  sidepieceFrontFaceY,
   sidepieceOrigin,
 } from '../src/transforms'
 
 const IDENTITY: AxisMap = { x: '+x', y: '+y', z: '+z' }
-/** Flats Left/Center, as measured. */
-const FLAT_LEFT: AxisMap = { x: '+z', y: '+x', z: '+y' }
+/** Flats Left/Center, as measured and confirmed by the spike check. */
+const FLAT_LEFT: AxisMap = { x: '-z', y: '-x', z: '+y' }
 /** Flats Right — the same part yawed 180 degrees. */
-const FLAT_RIGHT: AxisMap = { x: '-z', y: '-x', z: '+y' }
+const FLAT_RIGHT: AxisMap = { x: '+z', y: '+x', z: '+y' }
 /** Both spacer families. */
 const SPACER: AxisMap = { x: '+x', y: '-z', z: '+y' }
 
@@ -36,10 +37,10 @@ describe('axis maps', () => {
       [0, 1, 0],
       [0, 0, 1],
     ])
-    // wallX = printZ, wallY = printX, wallZ = printY
+    // wallX = -printZ, wallY = -printX, wallZ = +printY
     expect(rotationMatrix(FLAT_LEFT)).toEqual([
-      [0, 0, 1],
-      [1, 0, 0],
+      [0, 0, -1],
+      [-1, 0, 0],
       [0, 1, 0],
     ])
   })
@@ -64,8 +65,8 @@ describe('axis maps', () => {
   })
 
   it('maps points through the declared axes', () => {
-    expect(applyAxisMap(FLAT_LEFT, { x: 1, y: 2, z: 3 })).toEqual({ x: 3, y: 1, z: 2 })
-    expect(applyAxisMap(FLAT_RIGHT, { x: 1, y: 2, z: 3 })).toEqual({ x: -3, y: -1, z: 2 })
+    expect(applyAxisMap(FLAT_LEFT, { x: 1, y: 2, z: 3 })).toEqual({ x: -3, y: -1, z: 2 })
+    expect(applyAxisMap(FLAT_RIGHT, { x: 1, y: 2, z: 3 })).toEqual({ x: 3, y: 1, z: 2 })
   })
 })
 
@@ -150,41 +151,51 @@ describe('sidepiece anchoring', () => {
     thicknessMm: 13.7,
     tangWidthMm: 2.2,
     tangDepthMm: 8.5,
+    depthMm: 18.7,
     bottomBelowSlotCenterMm: 14.55,
   } as const
 
-  it('centres the tang on its slot, body to the right for a Left', () => {
+  it('centres the tang on its slot with the body running to +x', () => {
     const slotX = slotColumnX(3)
     const origin = sidepieceOrigin({ ...base, bodyExtends: '+x' }, slotX, slotRowCenterZ(2))
     expect(origin.x).toBeCloseTo(slotX - 1.1, 6)
-    // The tang spans the slot; the body runs off to +x.
     expect(origin.x + 13.7).toBeCloseTo(slotX - 1.1 + 13.7, 6)
   })
 
-  it('centres the tang on its slot, body to the left for a Right', () => {
+  it('centres the tang on its slot with the body running to -x', () => {
     const slotX = slotColumnX(3)
     const origin = sidepieceOrigin({ ...base, bodyExtends: '-x' }, slotX, slotRowCenterZ(2))
     expect(origin.x + 13.7).toBeCloseTo(slotX + 1.1, 6)
   })
 
-  it('puts a matched Left and Right the right distance apart', () => {
-    // A 3-wide centerpiece needs sidepieces three slot columns apart.
-    const left = sidepieceOrigin({ ...base, bodyExtends: '+x' }, slotColumnX(1), 0)
-    const right = sidepieceOrigin({ ...base, bodyExtends: '-x' }, slotColumnX(4), 0)
-    const innerGap = right.x + 13.7 - left.x
-    expect(innerGap).toBeCloseTo(3 * 25.4 + 2.2, 6)
+  it('leaves the span between a Left and a Right clear for the centerpiece', () => {
+    // Left carries its socket on the +x face, so its body runs back to -x and
+    // the span between the two slots belongs entirely to the centerpiece.
+    const left = sidepieceOrigin({ ...base, bodyExtends: '-x' }, slotColumnX(1), 0)
+    const right = sidepieceOrigin({ ...base, bodyExtends: '+x' }, slotColumnX(4), 0)
+
+    const leftInnerFace = left.x + 13.7
+    const rightInnerFace = right.x
+    expect(leftInnerFace).toBeCloseTo(slotColumnX(1) + 1.1, 6)
+    expect(rightInnerFace).toBeCloseTo(slotColumnX(4) - 1.1, 6)
+    expect(rightInnerFace - leftInnerFace).toBeCloseTo(3 * 25.4 - 2.2, 6)
   })
 
-  it('hangs the tang behind the wall face', () => {
-    const origin = sidepieceOrigin({ ...base, bodyExtends: '+x' }, 0, 0)
-    expect(origin.y).toBeCloseTo(-8.5, 6)
+  it('puts the body in front of the wall and the tang through it', () => {
+    // Y runs into the wall, so the front face is negative and the tang, which
+    // is the only part that passes through the slot, is the positive end.
+    const anchor = { ...base, bodyExtends: '-x' } as const
+    const origin = sidepieceOrigin(anchor, 0, 0)
+    expect(origin.y).toBeCloseTo(-10.2, 6)
+    expect(sidepieceFrontFaceY(anchor)).toBeCloseTo(-10.2, 6)
+    expect(origin.y + base.depthMm).toBeCloseTo(8.5, 6)
   })
 
   it('drops the bottom edge below the slot centre by the measured offset', () => {
     const slotZ = slotRowCenterZ(4)
-    const odd = sidepieceOrigin({ ...base, bodyExtends: '+x' }, 0, slotZ)
+    const odd = sidepieceOrigin({ ...base, bodyExtends: '-x' }, 0, slotZ)
     const even = sidepieceOrigin(
-      { ...base, bodyExtends: '+x', bottomBelowSlotCenterMm: 36.85 },
+      { ...base, bodyExtends: '-x', bottomBelowSlotCenterMm: 36.85 },
       0,
       slotZ,
     )
@@ -195,7 +206,7 @@ describe('sidepiece anchoring', () => {
 })
 
 describe('centerpiece anchoring', () => {
-  const blank = { printToWall: SPACER, bottomBelowSlotCenterMm: 11.45 }
+  const blank = { printToWall: SPACER, bottomBelowSlotCenterMm: 11.45, frontFaceYMm: -10.2 }
 
   it('reaches into the socket either side when the family has tabs', () => {
     const w = 3
@@ -222,75 +233,74 @@ describe('centerpiece anchoring', () => {
     expect(origin.x + 25.4 * w - 2.4).toBeCloseTo(slotColumnX(5) - 1.2, 6)
   })
 
-  it('sits flush against the wall face', () => {
-    expect(centerpieceOrigin({ ...blank, widthMm: 81.6 }, 0, 0, 3).y).toBe(0)
+  it('shares the front face of the sidepieces it sits between', () => {
+    expect(centerpieceOrigin({ ...blank, widthMm: 81.6 }, 0, 0, 3).y).toBe(-10.2)
   })
 })
 
-describe('the joint the spike check will look at', () => {
+describe('the joint the spike check confirmed', () => {
   const slotZ = slotRowCenterZ(2)
   const SIDE = {
     printToWall: FLAT_LEFT,
     thicknessMm: 13.7,
     tangWidthMm: 2.2,
     tangDepthMm: 8.5,
+    depthMm: 18.7,
     bottomBelowSlotCenterMm: 14.55,
-  }
+  } as const
   const FLAT_3_HEIGHT = 85.7
 
-  it('nests a height-matched centerpiece inside its sidepieces', () => {
+  it('reaches a tabbed centerpiece into the socket at each end', () => {
     const w = 3
-    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '+x' }, slotColumnX(1), slotZ)
-    const right = sidepieceOrigin({ ...SIDE, bodyExtends: '-x' }, slotColumnX(1 + w), slotZ)
+    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '-x' }, slotColumnX(1), slotZ)
     const blankWidth = 25.4 * w + 5.4
     const blank = centerpieceOrigin(
-      { printToWall: SPACER, widthMm: blankWidth, bottomBelowSlotCenterMm: 11.45 },
+      { printToWall: SPACER, widthMm: blankWidth, bottomBelowSlotCenterMm: 11.45, frontFaceYMm: -10.2 },
       slotColumnX(1),
       slotZ,
       w,
     )
 
-    // Across: each tab reaches 2.7 mm into the socket of the sidepiece beside it.
-    expect(blank.x).toBeCloseTo(left.x + 1.1 - 2.7, 6)
-    expect(blank.x + blankWidth).toBeCloseTo(right.x + 13.7 - 1.1 + 2.7, 6)
+    // Each tab reaches 2.7 mm past its slot column, into the socket there.
+    expect(blank.x).toBeCloseTo(slotColumnX(1) - 2.7, 6)
+    expect(blank.x + blankWidth).toBeCloseTo(slotColumnX(1 + w) + 2.7, 6)
 
-    // Up: inside the sidepiece, 6.6 mm below its top, as measured.
+    // Front faces flush — this is what lands the tab in the groove.
+    expect(blank.y).toBeCloseTo(left.y, 6)
+
+    // Inside the sidepiece height, 6.6 mm below its top, as measured.
     const sideTop = left.z + FLAT_3_HEIGHT
     expect(blank.z).toBeGreaterThan(left.z)
     expect(sideTop - (blank.z + 76.0)).toBeCloseTo(6.6, 6)
   })
 
-  it('flags a height mismatch instead of quietly making it fit', () => {
-    // The spike-check fixture pairs 3-unit Flats with a 2-unit clip-on, so it
-    // is a mismatch by this model: parity is keyed to the part's own h, and a
-    // 2-unit centerpiece anchored on the same slot row hangs below the
-    // sidepiece's bottom edge. Placement is permissive by design — it places
-    // the part and leaves the complaint to the issues panel.
-    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '+x' }, slotColumnX(1), slotZ)
-    const clip = centerpieceOrigin(
-      { printToWall: SPACER, widthMm: 25.4 * 3 - 2.4, bottomBelowSlotCenterMm: 36.85 },
-      slotColumnX(1),
-      slotZ,
-      3,
-    )
-
-    expect(clip.z).toBeLessThan(left.z)
-    expect(left.z - clip.z).toBeCloseTo(22.3, 6)
-  })
-
-  it('places a clip-on clear of both sidepieces across the wall', () => {
+  it('keeps a tabless centerpiece clear of both sidepiece bodies', () => {
     const w = 3
-    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '+x' }, slotColumnX(1), slotZ)
-    const right = sidepieceOrigin({ ...SIDE, bodyExtends: '-x' }, slotColumnX(1 + w), slotZ)
+    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '-x' }, slotColumnX(1), slotZ)
+    const right = sidepieceOrigin({ ...SIDE, bodyExtends: '+x' }, slotColumnX(1 + w), slotZ)
     const clipWidth = 25.4 * w - 2.4
     const clip = centerpieceOrigin(
-      { printToWall: SPACER, widthMm: clipWidth, bottomBelowSlotCenterMm: 36.85 },
+      { printToWall: SPACER, widthMm: clipWidth, bottomBelowSlotCenterMm: 36.85, frontFaceYMm: -10.2 },
       slotColumnX(1),
       slotZ,
       w,
     )
 
-    expect(clip.x).toBeGreaterThan(left.x)
-    expect(clip.x + clipWidth).toBeLessThan(right.x + 13.7)
+    expect(clip.x).toBeGreaterThan(left.x + 13.7)
+    expect(clip.x + clipWidth).toBeLessThan(right.x)
+  })
+
+  it('flags a height mismatch instead of quietly making it fit', () => {
+    // Placement is permissive by design: it places the part and leaves the
+    // complaint to the issues panel.
+    const left = sidepieceOrigin({ ...SIDE, bodyExtends: '-x' }, slotColumnX(1), slotZ)
+    const clip = centerpieceOrigin(
+      { printToWall: SPACER, widthMm: 25.4 * 3 - 2.4, bottomBelowSlotCenterMm: 36.85, frontFaceYMm: -10.2 },
+      slotColumnX(1),
+      slotZ,
+      3,
+    )
+    expect(clip.z).toBeLessThan(left.z)
+    expect(left.z - clip.z).toBeCloseTo(22.3, 6)
   })
 })

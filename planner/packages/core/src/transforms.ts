@@ -169,15 +169,25 @@ export interface SidepieceAnchor {
   readonly tangWidthMm: number
   /** How far the tang reaches behind the wall face. */
   readonly tangDepthMm: number
+  /** Full depth of the part, front face to the back of the tang. */
+  readonly depthMm: number
   /** Which way the body runs from the slot it hangs on. */
   readonly bodyExtends: '+x' | '-x'
   /** Distance from the engaged slot's centre down to the part's bottom edge. */
   readonly bottomBelowSlotCenterMm: number
 }
 
+/** Where a sidepiece's front face sits: everything else in depth follows this. */
+export function sidepieceFrontFaceY(anchor: SidepieceAnchor): number {
+  return -(anchor.depthMm - anchor.tangDepthMm)
+}
+
 /**
  * The tang is centred on its slot; the body hangs off to one side, which is
  * the whole difference between a Left and a Right.
+ *
+ * Y runs into the wall, so the body is at negative Y and only the tang, which
+ * passes through the slot, is positive.
  */
 export function sidepieceOrigin(
   anchor: SidepieceAnchor,
@@ -188,7 +198,11 @@ export function sidepieceOrigin(
   const x =
     anchor.bodyExtends === '+x' ? slotX - half : slotX + half - anchor.thicknessMm
 
-  return { x, y: -anchor.tangDepthMm, z: slotCenterZ - anchor.bottomBelowSlotCenterMm }
+  return {
+    x,
+    y: sidepieceFrontFaceY(anchor),
+    z: slotCenterZ - anchor.bottomBelowSlotCenterMm,
+  }
 }
 
 export interface CenterpieceAnchor {
@@ -196,6 +210,12 @@ export interface CenterpieceAnchor {
   /** Actual bounding width, including tab overhang or clearance. */
   readonly widthMm: number
   readonly bottomBelowSlotCenterMm: number
+  /**
+   * Shared with the sidepieces it sits between — see `sidepieceFrontFaceY`.
+   * Sitting the part at the wall plane instead puts its tab clear of the
+   * socket groove, which is how the spike check found this.
+   */
+  readonly frontFaceYMm: number
 }
 
 /**
@@ -212,7 +232,7 @@ export function centerpieceOrigin(
   const spanMm = COLUMN_PITCH_MM * widthUnits
   return {
     x: leftSlotX + (spanMm - anchor.widthMm) / 2,
-    y: 0,
+    y: anchor.frontFaceYMm,
     z: slotCenterZ - anchor.bottomBelowSlotCenterMm,
   }
 }

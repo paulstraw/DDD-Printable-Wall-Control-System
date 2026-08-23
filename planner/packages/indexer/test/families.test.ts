@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { slotSpanHeightMm } from '@ddd-planner/core'
 import { parsePartName } from '@ddd-planner/core'
 import { readStlFile } from '../src/stl'
+import { assessJoint, buildPhase1Joint } from '../src/assembly'
 
 const PLANNER_ROOT = join(import.meta.dirname, '..', '..', '..')
 const REPO_ROOT = join(PLANNER_ROOT, '..')
@@ -293,5 +294,44 @@ describe('the width formulas explain the tab geometry', () => {
 
     expect(clip.size.widthMm.perUnitMm).toBe(SLOT_PITCH)
     expect(clip.size.widthMm.constantMm).toBeCloseTo(-2 * clip.tabs.clearancePerSideMm, 6)
+  })
+})
+
+describe('the Phase-1 joint, built from the shipped rules', () => {
+  // This is the regression guard for the spike check. The original bug left
+  // every other assertion in this file passing: the axis maps were still
+  // proper rotations, the sizes still derived, the sockets simply faced the
+  // wrong way. Only assembling two sidepieces around a centerpiece catches it.
+  it('faces both sockets at the centerpiece', () => {
+    const verdict = assessJoint(buildPhase1Joint(3))
+    expect(verdict.leftFacesIn, 'left socket faces the span').toBe(true)
+    expect(verdict.rightFacesIn, 'right socket faces the span').toBe(true)
+  })
+
+  it('seats a tab in each socket', () => {
+    const { intoLeftSocket, intoRightSocket } = assessJoint(buildPhase1Joint(3))
+    for (const [label, into] of [['left', intoLeftSocket], ['right', intoRightSocket]] as const) {
+      // Into the 4.2 mm groove across, through 2.4 mm of tab in depth, and
+      // the full height of the centerpiece.
+      expect(into.x, `${label} across`).toBeGreaterThan(3.5)
+      expect(into.y, `${label} depth`).toBeGreaterThan(2.0)
+      expect(into.z, `${label} height`).toBeCloseTo(76.0, 1)
+    }
+  })
+
+  it('is symmetric — a Left and a Right seat identically', () => {
+    const { intoLeftSocket, intoRightSocket } = assessJoint(buildPhase1Joint(3))
+    // Loose to 0.001 mm: these come off float32 vertices, and the two meshes
+    // are separately exported mirrors rather than one reused twice.
+    expect(intoRightSocket.x).toBeCloseTo(intoLeftSocket.x, 3)
+    expect(intoRightSocket.y).toBeCloseTo(intoLeftSocket.y, 3)
+  })
+
+  it('holds at every width the family ships', () => {
+    for (const w of [2, 3, 4, 5, 6, 7]) {
+      const verdict = assessJoint(buildPhase1Joint(w))
+      expect(verdict.socketsFaceEachOther, `${w} wide`).toBe(true)
+      expect(verdict.intoLeftSocket.x, `${w} wide`).toBeGreaterThan(3.5)
+    }
   })
 })
