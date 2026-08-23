@@ -33,8 +33,43 @@ export function loadFamilies(): { families: FamilyRule[] } {
   return cached as { families: FamilyRule[] }
 }
 
+/**
+ * Merge a family onto its archetype.
+ *
+ * Wall Control parts share one mounting interface by construction, so the
+ * archetype carries it once and a family says only what is its own. A family
+ * key always wins, and the nested blocks merge one level deep so a family can
+ * add `size.depthMm` without restating `size.heightMm`.
+ */
+export function resolveFamily(family: FamilyRule, archetypes: Record<string, FamilyRule>): FamilyRule {
+  const name = family.archetype as string | undefined
+  if (!name) return family
+
+  const base = archetypes[name]
+  if (!base) throw new Error(`family ${family.id} names unknown archetype ${name}`)
+
+  const merged: Record<string, unknown> = { ...base, ...family }
+  for (const key of ['size', 'anchor', 'printToWall', 'sockets', 'tabs']) {
+    const a = (base as Record<string, unknown>)[key]
+    const b = (family as Record<string, unknown>)[key]
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      merged[key] = { ...(a as object), ...(b as object) }
+    }
+  }
+  return merged as FamilyRule
+}
+
+/** Every family, with its archetype already folded in. */
+export function resolvedFamilies(): FamilyRule[] {
+  const file = loadFamilies() as unknown as {
+    families: FamilyRule[]
+    archetypes: Record<string, FamilyRule>
+  }
+  return file.families.map((f) => resolveFamily(f, file.archetypes ?? {}))
+}
+
 export function ruleFor(id: string): FamilyRule {
-  const found = loadFamilies().families.find((f) => f.id === id)
+  const found = resolvedFamilies().find((f) => f.id === id)
   if (!found) throw new Error(`no family rule for ${id}`)
   return found
 }
@@ -165,7 +200,11 @@ export function buildPhase1Joint(widthUnits = 3, col = 2, slotZ = 127) {
   const f = flats as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const b = blank as any
-  const frontFaceY = f.anchor.depth.frontFaceYMm as number
+  // A sidepiece's front face follows its own depth; the centerpiece uses the
+  // mounting interface depth. For a Flat the two coincide at -10.2, which is
+  // exactly why the joint is front-flush.
+  const flatDepthMm = 18.7
+  const frontFaceY = -(flatDepthMm - (f.anchor.tang.depthMm as number))
   const slotX = (c: number) => 25.4 + 25.4 * c
 
   const left = placeSidepiece({

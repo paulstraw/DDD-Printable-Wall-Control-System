@@ -137,12 +137,12 @@ describe('the indexer, end to end', () => {
   it('indexes every Phase-1 part and writes the assets it names', async () => {
     const { index, stats } = await runIndexer(out)
 
-    // 24 Flats + 28 Spacer blank + 12 Spacer clip-on.
-    expect(index.parts).toHaveLength(64)
-    expect(index.families).toHaveLength(3)
+    // Every dimensioned part in the library.
+    expect(index.parts).toHaveLength(532)
+    expect(index.families).toHaveLength(18)
 
-    // The pin duplicated into the clip-on folder is a fastener, not a part.
-    expect(Object.keys(index.fasteners)).toEqual(['4x10x8mm Pin'])
+    // Fasteners duplicated into family folders are fasteners, not parts.
+    expect(Object.keys(index.fasteners).sort()).toEqual(['4x10x8mm Pin', '8mm Lock Pin'])
     expect(index.parts.some((p) => /pin/i.test(p.name))).toBe(false)
 
     for (const part of index.parts) {
@@ -199,11 +199,16 @@ describe('the indexer, end to end', () => {
     expect(by('3x3 Spacer blank').placement.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
     expect(by('3x3 Spacer clip-on').placement.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
 
-    // Everything shares one front face, which is what seats the tabs.
-    const faces = new Set(
-      index.parts.map((p: { placement: { frontFaceYMm: number } }) => p.placement.frontFaceYMm),
+    // Centerpieces share the mounting-interface front face; sidepieces sit at
+    // their own depth, which is how a 67 mm bracket and an 18.7 mm flat both
+    // hang correctly off the same slot.
+    const centerpieceFaces = new Set(
+      index.parts
+        .filter((p: { family: string }) => p.family.startsWith('centerpieces/'))
+        .map((p: { placement: { frontFaceYMm: number } }) => p.placement.frontFaceYMm),
     )
-    expect(faces.size).toBe(1)
+    expect(centerpieceFaces).toEqual(new Set([-10.2]))
+    expect(by('3x0 Flat Left').placement.frontFaceYMm).toBeCloseTo(-10.2, 1)
   })
 
   it('gives a centerpiece the columns it spans and a sidepiece one', async () => {

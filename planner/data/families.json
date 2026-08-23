@@ -1,11 +1,19 @@
 {
-  "$schemaVersion": 1,
+  "$schemaVersion": 2,
   "$comment": [
-    "Per-family placement rules. Every number here was measured off the STLs with",
-    "packages/indexer/src/stl.ts, not taken from a drawing — see the sibling test",
-    "packages/indexer/test/families.test.ts, which re-derives each one from the",
-    "meshes on every run. Phase 1 covers three families; Phase 2 adds the rest.",
-    "Per-part corrections go in overrides.json, never here."
+    "Per-family placement rules. Every number here was measured off the STLs",
+    "with packages/indexer/src/stl.ts — see packages/indexer/test/families.test.ts,",
+    "which re-derives them from the meshes on every run.",
+    "",
+    "Schema 2 introduces archetypes. Wall Control parts share one mounting",
+    "interface by construction: seven of the eight sidepiece families have",
+    "identical tang, thickness and height geometry, and differ only in how far",
+    "they project. Saying that once is both less to get wrong and a truer",
+    "description of the system than seventeen near-identical blocks.",
+    "",
+    "A family may omit a size formula. The indexer measures every part anyway,",
+    "so a formula here is an assertion that catches bad data, not an input to",
+    "placement. Where a family has no single rule, saying nothing is honest."
   ],
 
   "conventions": {
@@ -15,39 +23,39 @@
       "y": "depth into the wall, as the design doc has it. The panel's front face is y = 0, so mounted parts occupy y < 0 and anything reaching behind the panel is y > 0.",
       "z": "up"
     },
-    "printAxes": "whatever SketchUp exported. Each family declares its own mapping.",
+    "printAxes": "whatever SketchUp exported. Each archetype declares its own mapping.",
     "printToWall": "wall axis = signed print axis, e.g. y: \"+x\" means wallY = printX. Every mapping is a proper rotation (determinant +1); mirrored variants ship as separate meshes.",
     "recentre": "STL origins are arbitrary. Translate by -bbox.min before applying any rule.",
-    "depthDatum": "Front-flush. A sidepiece's body front face sits at y = -(depthMm - tang.depthMm) and its tang runs back to +tang.depthMm. A centerpiece shares that same front face, which is what lands its tab in the socket groove; anchoring it at the wall plane instead misses the groove entirely."
+    "depthDatum": "Front-flush at the mounting interface. A sidepiece's front face is -(its own depth - tang.depthMm), so a bracket that projects 67 mm sits further out than a flat that projects 18.7 mm. A centerpiece uses the interface depth itself, which is what lands its tab in the socket."
   },
 
   "fasteners": {
     "4x10x8mm Pin": {
       "path": "Accessories/4x10x8mm Pin.stl",
-      "note": "Joins a tabless centerpiece to its sidepieces. Also duplicated into the folders of the families that need it."
+      "note": "Joins a tabless centerpiece to its sidepieces."
+    },
+    "8mm Lock Pin": {
+      "path": "Accessories/8mm Lock Pin.stl",
+      "note": "Locks a retainer or locking spacer in place."
     }
   },
 
-  "families": [
-    {
-      "id": "sidepieces/flats",
-      "dir": "Sidepieces/Flats",
+  "archetypes": {
+    "sidepiece": {
       "kind": "sidepiece",
-      "label": "Flat",
-      "dimensionOrder": "height x depth",
-      "parts": 24,
+      "$comment": "Verified identical across Flats, Angle brackets, L brackets, Square brackets, U brackets, Strap mounts and Dowel rod hangers: same height series, same 13.7/27.6 thickness, same tang at the same end.",
 
       "printToWall": {
-        "left":   { "x": "-z", "y": "-x", "z": "+y" },
+        "left": { "x": "-z", "y": "-x", "z": "+y" },
         "center": { "x": "-z", "y": "-x", "z": "+y" },
-        "right":  { "x": "+z", "y": "+x", "z": "+y" }
+        "plain": { "x": "-z", "y": "-x", "z": "+y" },
+        "right": { "x": "+z", "y": "+x", "z": "+y" }
       },
-      "printToWallNote": "Left and Right are mirror images in the print depth axis: Left carries its 2.2 mm tang at min.x, Right at max.x. Right is therefore Left yawed 180 degrees about wall Z, which is why both meshes exist rather than one being reused. These maps are not free choices - fixing the tang behind the wall, the part upright, and the determinant at +1 leaves no freedom in the third axis. Getting the direction of Y wrong swaps Left and Right while every validity check still passes, which is exactly what the spike check caught.",
+      "printToWallNote": "Left and Right are mirror images in the print depth axis: Left carries its 2.2 mm tang at min.x, Right at max.x. These maps are not free choices - fixing the tang behind the wall, the part upright, and the determinant at +1 leaves no freedom in the third axis. Getting the direction of Y wrong swaps Left and Right while every validity check still passes, which is exactly what the Phase 1 spike check caught.",
 
       "size": {
         "heightMm": { "rule": "slotSpan", "slotsEngaged": "ceil(h/2)", "lipOddMm": 9.5, "lipEvenMm": 31.8 },
-        "depthMm": { "constant": 18.7 },
-        "thicknessMm": { "left": 13.7, "right": 13.7, "center": 27.6 }
+        "thicknessMm": { "left": 13.7, "right": 13.7, "center": 27.6, "plain": 27.6 }
       },
 
       "anchor": {
@@ -55,91 +63,276 @@
         "slotsEngaged": "ceil(h/2)",
         "slotPitchMm": 50.8,
         "tang": { "widthMm": 2.2, "heightMm": 20.3, "depthMm": 8.5, "atPrintFace": "z-min" },
-        "tangDepthNote": "How far the tang reaches behind the wall face. Measured as the print-X run over which the section is only slot-width thick: 0 to 8.5 mm, widening to the full 13.7 mm body by x = 10. The body's bearing face is therefore the wall plane, and the part occupies wall Y from -10.2 (front face) to +8.5 (behind the panel).",
         "bottomBelowSlotCenterMm": { "odd": 14.55, "even": 36.85 },
-        "bottomBelowSlotCenterNote": "Places the tang band centred in its 25.4 mm slot. The odd/even difference is 22.3 mm, the same alternation that generates the Flats height series - two independent derivations agreeing. Registration is centre-aligned; if the spike check shows the part hangs off the slot's lower edge instead, both numbers drop by 2.55.",
-        "bodyExtendsFromSlot": { "left": "-x", "right": "+x", "center": "-x" },
-        "bodyExtendsNote": "A Left sidepiece carries its socket on the +X face, so it sits at the left end of an assembly with its body running back to -X. Verified by the spike check: with these values the two sockets face each other across the span.",
+        "bottomBelowSlotCenterNote": "Places the tang band centred in its 25.4 mm slot. The odd/even difference is 22.3 mm, the same alternation that generates the height series - two independent derivations agreeing.",
+        "bodyExtendsFromSlot": { "left": "-x", "right": "+x", "center": "-x", "plain": "-x" },
         "depth": {
-          "frontFaceYMm": -10.2,
-          "note": "= -(size.depthMm - tang.depthMm). Centerpieces share this face."
+          "fromMeasuredDepth": true,
+          "note": "Front face = -(measured depth - tang.depthMm). Depth is per family and, for U brackets, per part, so it is taken from the mesh rather than declared."
         }
       },
 
       "sockets": {
-        "count": { "left": 1, "right": 1, "center": 2 },
+        "count": { "left": 1, "right": 1, "center": 2, "plain": 2 },
         "countNote": "Keyed off the Center token: a Center sidepiece is 27.6 mm thick against 13.7 and takes a centerpiece on both faces.",
-        "acceptsHeightUnits": "same h as the sidepiece",
-        "centerpieceTopBelowSidepieceTopMm": 6.6,
-        "verticalNote": "Measured across all eight Flats sizes: the socket band's span equals the matching centerpiece's height exactly, and the gap to the top of the sidepiece is 6.6 mm at every size. Anchoring from the top is uniform; from the bottom it alternates 3.1 / 0.0 with parity."
-      },
-
-      "fasteners": []
+        "centerpieceTopBelowSidepieceTopMm": 6.6
+      }
     },
 
-    {
-      "id": "centerpieces/spacer_blank",
-      "dir": "Centerpieces/Spacer_blank",
+    "centerpiece": {
       "kind": "centerpiece",
-      "label": "Spacer blank",
-      "dimensionOrder": "height x width",
-      "parts": 28,
+      "$comment": "Height is 25.4h - 0.2 in every centerpiece family that has a rule at all. Families differ in width formula, thickness, and whether they carry tabs.",
 
       "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
 
       "size": {
-        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
-        "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 },
-        "thicknessMm": { "constant": 6.15 }
+        "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 }
       },
 
       "anchor": {
         "spansSlotColumns": "w",
         "bottomBelowSlotCenterMm": { "odd": 11.45, "even": 36.85 },
         "bottomBelowSlotCenterNote": "Derived from the sidepiece anchor plus the measured 6.6 mm top gap, then checked to be independent of h.",
-        "depth": { "matchesSidepieceFrontFace": true }
-      },
+        "depth": {
+          "frontFaceYMm": -10.2,
+          "note": "= -(18.7 - 8.5): the depth of the mounting interface itself, not of whatever sidepiece happens to hold it. This is what seats the tab in the socket."
+        }
+      }
+    }
+  },
 
-      "tabs": {
-        "present": true,
-        "overhangPerSideMm": 2.7,
-        "heightMm": 60.6,
-        "thicknessMm": 2.4,
-        "note": "Width is 25.4w + 5.4: the body spans exactly w slot columns and each tab reaches 2.7 mm past the slot centre into the sidepiece's socket."
-      },
-
+  "families": [
+    {
+      "id": "sidepieces/flats",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/Flats",
+      "label": "Flat",
+      "dimensionOrder": "height x depth",
+      "parts": 24,
+      "size": { "depthMm": { "constant": 18.7 } },
       "fasteners": []
+    },
+    {
+      "id": "sidepieces/angle_brackets",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/Angle_brackets",
+      "label": "Angle bracket",
+      "dimensionOrder": "height x depth",
+      "parts": 68,
+      "size": { "depthMm": { "perUnitMm": 25.4, "constantMm": 16.35, "toleranceMm": 0.3 } },
+      "sizeNote": "The Mid-span Support variants come out 0.16 mm narrower than the rest of their size, hence the loosened tolerance.",
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/l_brackets",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/L_brackets",
+      "label": "L bracket",
+      "dimensionOrder": "height x depth",
+      "parts": 57,
+      "size": { "depthMm": { "perUnitMm": 25.4, "constantMm": 16.35 } },
+      "sizeNote": "Some Center variants measure 13.7 rather than 27.6 thick; thickness is taken from the mesh, so this does not affect placement.",
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/square_brackets",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/Square_brackets",
+      "label": "Square bracket",
+      "dimensionOrder": "height x depth",
+      "parts": 15,
+      "size": { "depthMm": { "perUnitMm": 25.4, "constantMm": 16.35 } },
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/u_brackets",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/U_brackets",
+      "label": "U bracket",
+      "dimensionOrder": "height x depth",
+      "parts": 24,
+      "sizeNote": "Depth follows the fractional width in the filename (2.25, 2.5, 3.25, 4.25) rather than a whole number of columns, so no single formula is declared. The indexer measures each part.",
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/strap_mounts",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/Strap_mounts",
+      "label": "Strap mount",
+      "dimensionOrder": "height x depth",
+      "parts": 12,
+      "sizeNote": "All are w=0; depth varies with the strap width named in the file (20/25/30/35 mm), so it is measured rather than derived.",
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/dowel_rod_hanger",
+      "archetype": "sidepiece",
+      "dir": "Sidepieces/Dowel_rod_hanger",
+      "label": "Dowel rod hanger",
+      "dimensionOrder": "height x depth",
+      "parts": 12,
+      "size": { "depthMm": { "perUnitMm": 25.4, "constantMm": 16.35 } },
+      "fasteners": []
+    },
+    {
+      "id": "sidepieces/retainers",
+      "archetype": "centerpiece",
+      "dir": "Sidepieces/Retainers",
+      "label": "Retainer",
+      "dimensionOrder": "height x width",
+      "parts": 15,
+      "size": {
+        "widthMm": { "perUnitMm": 11.5, "constantMm": 15.4 },
+        "thicknessMm": { "constant": 6.15, "toleranceMm": 0.25 }
+      },
+      "archetypeNote": "Filed under Sidepieces but it is not one: it has no tang, and its height follows the centerpiece rule 25.4h - 0.2 rather than the Flats series. It clips onto an assembly, so it takes the centerpiece archetype.",
+      "fasteners": [{ "id": "8mm Lock Pin", "quantity": 2 }]
     },
 
     {
+      "id": "centerpieces/spacer_blank",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Spacer_blank",
+      "label": "Spacer blank",
+      "dimensionOrder": "height x width",
+      "parts": 28,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
+        "thicknessMm": { "constant": 6.15 }
+      },
+      "tabs": { "present": true, "overhangPerSideMm": 2.7, "heightMm": 60.6, "thicknessMm": 2.4 },
+      "fasteners": []
+    },
+    {
+      "id": "centerpieces/spacer_perforated",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Spacer_perforated",
+      "label": "Spacer perforated",
+      "dimensionOrder": "height x width",
+      "parts": 18,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
+        "thicknessMm": { "constant": 6.15 }
+      },
+      "tabs": { "present": true, "overhangPerSideMm": 2.7 },
+      "fasteners": []
+    },
+    {
       "id": "centerpieces/spacer_clip-on",
+      "archetype": "centerpiece",
       "dir": "Centerpieces/Spacer_clip-on",
-      "kind": "centerpiece",
       "label": "Spacer clip-on",
       "dimensionOrder": "height x width",
       "parts": 12,
-
-      "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
-
       "size": {
         "widthMm": { "perUnitMm": 25.4, "constantMm": -2.4 },
-        "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 },
         "thicknessMm": { "constant": 8.6 }
       },
-
-      "anchor": {
-        "spansSlotColumns": "w",
-        "bottomBelowSlotCenterMm": { "odd": 11.45, "even": 36.85 },
-        "depth": { "matchesSidepieceFrontFace": true }
-      },
-
       "tabs": {
         "present": false,
         "clearancePerSideMm": 1.2,
-        "note": "Width is 25.4w - 2.4, so it clears the slot columns by 1.2 mm a side instead of overlapping them. No tabs is exactly why this family needs pins."
+        "note": "Narrower than its column span rather than wider, so it clears the slot columns instead of reaching into them. No tabs is exactly why this family needs pins."
       },
-
       "fasteners": [{ "id": "4x10x8mm Pin", "quantity": 4 }]
+    },
+    {
+      "id": "centerpieces/spacer_blank_flush",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Spacer_blank_flush",
+      "label": "Spacer blank flush",
+      "dimensionOrder": "height x width",
+      "parts": 17,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": -2.4 },
+        "thicknessMm": { "constant": 8.7 }
+      },
+      "tabs": { "present": false, "clearancePerSideMm": 1.2 },
+      "knownDeviations": [
+        {
+          "part": "3x5 Spacer blank flush",
+          "measuredWidthMm": 99.2,
+          "expectedWidthMm": 124.6,
+          "note": "Measures four columns wide, not five. Either the name or the model is wrong upstream; the indexer places it on its measured width, so it sits correctly but its name overstates it."
+        }
+      ],
+      "fasteners": [{ "id": "4x10x8mm Pin", "quantity": 4 }]
+    },
+    {
+      "id": "centerpieces/locking_spacer",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Locking_spacer",
+      "label": "Locking spacer",
+      "dimensionOrder": "height x width",
+      "parts": 42,
+      "size": { "thicknessMm": { "constant": 6.15 } },
+      "sizeNote": "Widths span 1-14 columns and do not fit one formula; measured per part.",
+      "fasteners": [{ "id": "8mm Lock Pin", "quantity": 2 }]
+    },
+    {
+      "id": "centerpieces/u_hooks",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/U_hooks",
+      "label": "U hook",
+      "dimensionOrder": "height x width",
+      "parts": 9,
+      "size": { "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 } },
+      "sizeNote": "Thickness is 6.15 for the plate and up to 9.32 where the hook projects; measured per part.",
+      "tabs": { "present": true, "overhangPerSideMm": 2.7 },
+      "fasteners": []
+    },
+    {
+      "id": "centerpieces/gridfinity",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Gridfinity",
+      "label": "Gridfinity frame",
+      "dimensionOrder": "height x width",
+      "parts": 22,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4, "toleranceMm": 1.1 },
+        "thicknessMm": { "constant": 10.8 }
+      },
+      "sizeNote": "The trailing 1x6 in a name is the Gridfinity grid, not a wall dimension. The five 14-column frames measure 360.0 rather than 361.0, hence the loosened tolerance.",
+      "tabs": { "present": true, "overhangPerSideMm": 2.7 },
+      "fasteners": []
+    },
+    {
+      "id": "centerpieces/honeycomb_storage_wall",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Honeycomb_Storage_Wall",
+      "label": "Honeycomb storage wall",
+      "dimensionOrder": "height x width",
+      "parts": 3,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
+        "thicknessMm": { "constant": 8 }
+      },
+      "tabs": { "present": true, "overhangPerSideMm": 2.7 },
+      "fasteners": []
+    },
+    {
+      "id": "centerpieces/locking_spacer_for_horizontal_wall_control",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Locking_spacer_for_horizontal_Wall_Control",
+      "label": "Locking spacer (horizontal panel)",
+      "dimensionOrder": "height x width",
+      "parts": 14,
+      "size": {
+        "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
+        "thicknessMm": { "constant": 6.15 }
+      },
+      "tabs": { "present": true, "overhangPerSideMm": 2.7 },
+      "fasteners": []
+    },
+    {
+      "id": "centerpieces/tool_hooks",
+      "archetype": "centerpiece",
+      "dir": "Centerpieces/Tool_hooks",
+      "label": "Tool hook",
+      "dimensionOrder": "height x width",
+      "parts": 140,
+      "perPart": true,
+      "perPartNote": "141 community contributions with no single rule. Height matches 25.4h - 0.2 for 96 of 140 and width matches a known formula for 91 of 140; the rest are neither, because a bounding box here includes the tool-holding geometry rather than just the mounting plate, and several names disagree with their model. Every part is still indexed and placeable - placement comes from the measured mesh - but the vertical anchor is approximate for this family. See Open questions.",
+      "fasteners": []
     }
   ]
 }

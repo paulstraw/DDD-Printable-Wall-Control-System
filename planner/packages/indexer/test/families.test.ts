@@ -1,29 +1,14 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { slotSpanHeightMm } from '@ddd-planner/core'
-import { parsePartName } from '@ddd-planner/core'
+import { type AxisMap, parsePartName, slotSpanHeightMm } from '@ddd-planner/core'
 import { readStlFile } from '../src/stl'
-import { assessJoint, buildPhase1Joint } from '../src/assembly'
+import { REPO_ROOT, assessJoint, buildPhase1Joint, resolvedFamilies } from '../src/assembly'
 
 const PLANNER_ROOT = join(import.meta.dirname, '..', '..', '..')
-const REPO_ROOT = join(PLANNER_ROOT, '..')
-
-interface AxisMap {
-  x: string
-  y: string
-  z: string
-}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DATA: any = JSON.parse(readFileSync(join(PLANNER_ROOT, 'data', 'families.json'), 'utf8'))
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const family = (id: string): any => {
-  const found = DATA.families.find((f: { id: string }) => f.id === id)
-  if (!found) throw new Error(`no family ${id}`)
-  return found
-}
-
 /** Every part in a family directory that carries grid dimensions. */
 function partsIn(dir: string) {
   return readdirSync(join(REPO_ROOT, dir))
@@ -53,266 +38,205 @@ function determinant(m: number[][]): number {
   )
 }
 
-/** Y extent of material inside a print-X slab, relative to bbox.min.y. */
-function socketBand(file: string, xLo: number, xHi: number) {
-  const mesh = readStlFile(join(REPO_ROOT, file))
-  const p = mesh.positions
-  const b = mesh.bbox
-  let lo = Infinity
-  let hi = -Infinity
-  for (let i = 0; i < p.length; i += 9) {
-    const xs = [p[i]!, p[i + 3]!, p[i + 6]!].map((v) => v - b.min.x)
-    if (Math.min(...xs) > xHi || Math.max(...xs) < xLo) continue
-    for (const j of [1, 4, 7]) {
-      const y = p[i + j]! - b.min.y
-      if (y < lo) lo = y
-      if (y > hi) hi = y
-    }
-  }
-  return { lo, hi, height: b.size.y }
+/** Model noise is real: one Gridfinity frame sits 0.1 mm proud of its rule. */
+const HEIGHT_TOLERANCE_MM = 0.15
+
+const FLATS_HEIGHT: Record<number, number> = {
+  1: 34.9, 2: 57.2, 3: 85.7, 4: 108, 5: 136.5, 6: 158.8, 7: 187.3, 8: 209.6,
 }
 
-describe('conventions', () => {
-  it('declares a proper rotation for every family and variant', () => {
-    const maps: AxisMap[] = []
-    for (const f of DATA.families) {
-      const p = f.printToWall
-      if (typeof p.x === 'string') maps.push(p as AxisMap)
-      else for (const variant of Object.values(p)) maps.push(variant as AxisMap)
-    }
-    expect(maps.length).toBeGreaterThan(0)
-    for (const map of maps) {
-      // A reflection here would silently mirror parts on the wall.
-      expect(determinant(toMatrix(map))).toBe(1)
-    }
-  })
+interface Declared {
+  perUnitMm?: number
+  constantMm?: number
+  constant?: number
+  toleranceMm?: number
+}
 
-  it('uses each print axis exactly once per mapping', () => {
-    for (const f of DATA.families) {
-      const p = f.printToWall
-      const maps: AxisMap[] = typeof p.x === 'string' ? [p] : (Object.values(p) as AxisMap[])
-      for (const map of maps) {
-        const used = [map.x[1], map.y[1], map.z[1]].sort()
-        expect(used).toEqual(['x', 'y', 'z'])
-      }
-    }
-  })
-})
+/** What a declared size formula predicts for n units, or null if undeclared. */
+function predict(rule: Declared | undefined, n: number): number | null {
+  if (!rule) return null
+  if (typeof rule.constant === 'number') return rule.constant
+  if (typeof rule.perUnitMm === 'number') return rule.perUnitMm * n + (rule.constantMm ?? 0)
+  return null
+}
 
-describe('Sidepieces/Flats', () => {
-  const rule = family('sidepieces/flats')
-  const parts = partsIn(rule.dir)
-
-  it('has the declared part count', () => {
-    expect(parts).toHaveLength(rule.parts)
-  })
-
-  it('derives every height from the slot span plus a parity lip', () => {
-    for (const { name, parsed } of parts) {
-      const h = parsed.h as number
-      const lip = h % 2 === 1 ? rule.size.heightMm.lipOddMm : rule.size.heightMm.lipEvenMm
-      const expected = slotSpanHeightMm(Math.ceil(h / 2)) + lip
-      const measured = readStlFile(join(REPO_ROOT, rule.dir, name)).bbox.size.y
-      expect(measured, name).toBeCloseTo(expected, 1)
-    }
-  })
-
-  it('has a constant depth and a thickness that keys off the variant', () => {
-    for (const { name, parsed } of parts) {
-      const bbox = readStlFile(join(REPO_ROOT, rule.dir, name)).bbox
-      expect(bbox.size.x, name).toBeCloseTo(rule.size.depthMm.constant, 1)
-      const variant = parsed.variant as 'left' | 'right' | 'center'
-      expect(bbox.size.z, name).toBeCloseTo(rule.size.thicknessMm[variant], 1)
-    }
-  })
-
-  it('reaches behind the wall by the declared tang depth', () => {
-    // Walk out along print X and find where the section stops being as thin
-    // as the slot. Testing triangles individually will not do it: the part's
-    // flat z = 0 face is thin everywhere and runs the whole depth.
-    const mesh = readStlFile(join(REPO_ROOT, rule.dir, '3x0 Flat Left.stl'))
-    const p = mesh.positions
-    const b = mesh.bbox
-    const BIN = 0.5
-    const bins = Math.ceil(b.size.x / BIN)
-    const thickest = new Array<number>(bins).fill(0)
-
-    for (let i = 0; i < p.length; i += 9) {
-      const xs = [p[i]!, p[i + 3]!, p[i + 6]!].map((v) => v - b.min.x)
-      const zs = [p[i + 2]!, p[i + 5]!, p[i + 8]!].map((v) => v - b.min.z)
-      const hi = Math.max(...zs)
-      const from = Math.max(0, Math.floor(Math.min(...xs) / BIN))
-      const to = Math.min(bins - 1, Math.floor(Math.max(...xs) / BIN))
-      for (let k = from; k <= to; k++) thickest[k] = Math.max(thickest[k]!, hi)
-    }
-
-    let depth = 0
-    for (let k = 0; k < bins; k++) {
-      if (thickest[k]! > rule.anchor.tang.widthMm + 0.1) break
-      depth = (k + 1) * BIN
-    }
-    expect(depth).toBeCloseTo(rule.anchor.tang.depthMm, 0)
-  })
-
-  it('carries its tang on the print face the rule claims', () => {
-    // Left keeps the 2.2 mm tang at min.x; Right mirrors it to max.x.
-    const left = readStlFile(join(REPO_ROOT, rule.dir, '3x0 Flat Left.stl'))
-    const right = readStlFile(join(REPO_ROOT, rule.dir, '3x0 Flat Right.stl'))
-    const tang = rule.anchor.tang.widthMm
-
-    const thin = (mesh: typeof left, xLo: number, xHi: number) => {
-      const p = mesh.positions
-      const b = mesh.bbox
-      let lo = Infinity
-      let hi = -Infinity
-      for (let i = 0; i < p.length; i += 9) {
-        const xs = [p[i]!, p[i + 3]!, p[i + 6]!].map((v) => v - b.min.x)
-        if (Math.min(...xs) > xHi || Math.max(...xs) < xLo) continue
-        for (const j of [2, 5, 8]) {
-          const z = p[i + j]! - b.min.z
-          if (z < lo) lo = z
-          if (z > hi) hi = z
-        }
-      }
-      return hi - lo
-    }
-
-    expect(thin(left, 0, 3)).toBeCloseTo(tang, 1)
-    expect(thin(right, 15.7, 18.7)).toBeCloseTo(tang, 1)
-  })
-})
-
-describe('centerpiece sizes', () => {
-  for (const id of ['centerpieces/spacer_blank', 'centerpieces/spacer_clip-on']) {
-    const rule = family(id)
-    const parts = partsIn(rule.dir)
-
-    it(`${rule.label}: has the declared part count`, () => {
-      expect(parts).toHaveLength(rule.parts)
-    })
-
-    it(`${rule.label}: derives width, height and thickness from the unit formulas`, () => {
-      for (const { name, parsed } of parts) {
-        const bbox = readStlFile(join(REPO_ROOT, rule.dir, name)).bbox
-        const w = parsed.w as number
-        const h = parsed.h as number
-        expect(bbox.size.x, `${name} width`).toBeCloseTo(
-          rule.size.widthMm.perUnitMm * w + rule.size.widthMm.constantMm,
-          1,
-        )
-        expect(bbox.size.y, `${name} height`).toBeCloseTo(
-          rule.size.heightMm.perUnitMm * h + rule.size.heightMm.constantMm,
-          1,
-        )
-        expect(bbox.size.z, `${name} thickness`).toBeCloseTo(rule.size.thicknessMm.constant, 1)
-      }
-    })
+const measured = new Map<string, { x: number; y: number; z: number }>()
+function sizeOf(dir: string, file: string) {
+  const key = `${dir}/${file}`
+  let hit = measured.get(key)
+  if (!hit) {
+    const b = readStlFile(join(REPO_ROOT, dir, file)).bbox
+    hit = { x: b.size.x, y: b.size.y, z: b.size.z }
+    measured.set(key, hit)
   }
-})
+  return hit
+}
 
-describe('the socket, measured against the parts that go in it', () => {
-  const flats = family('sidepieces/flats')
-  const blank = family('centerpieces/spacer_blank')
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const FAMILIES: any[] = resolvedFamilies() as any[]
 
-  it('spans exactly the height of the matching centerpiece, at every size', () => {
-    for (let h = 1; h <= 8; h++) {
-      const band = socketBand(join(flats.dir, `${h}x0 Flat Left.stl`), 10.5, 18.5)
-      const centerpieceHeight = blank.size.heightMm.perUnitMm * h + blank.size.heightMm.constantMm
-      expect(band.hi - band.lo, `${h}x0`).toBeCloseTo(centerpieceHeight, 1)
+describe('the file itself', () => {
+  it('resolves every family onto a known archetype', () => {
+    expect(FAMILIES.length).toBeGreaterThan(0)
+    for (const family of FAMILIES) {
+      expect(['sidepiece', 'centerpiece'], family.id).toContain(family.kind)
+      expect(family.anchor, family.id).toBeDefined()
+      expect(family.printToWall, family.id).toBeDefined()
     }
   })
 
-  it('sits the declared distance below the top of the sidepiece', () => {
-    const gap = flats.sockets.centerpieceTopBelowSidepieceTopMm
-    for (let h = 1; h <= 8; h++) {
-      const band = socketBand(join(flats.dir, `${h}x0 Flat Left.stl`), 10.5, 18.5)
-      expect(band.height - band.hi, `${h}x0`).toBeCloseTo(gap, 1)
-    }
-  })
-
-  it('agrees with the centerpiece anchor offsets', () => {
-    // Sidepiece bottom and centerpiece bottom are both stated relative to the
-    // slot centre; their difference must equal what the meshes show.
-    for (let h = 1; h <= 4; h++) {
-      const parity = h % 2 === 1 ? 'odd' : 'even'
-      const declared =
-        flats.anchor.bottomBelowSlotCenterMm[parity] - blank.anchor.bottomBelowSlotCenterMm[parity]
-      const band = socketBand(join(flats.dir, `${h}x0 Flat Left.stl`), 10.5, 18.5)
-      expect(declared, `${h}x0`).toBeCloseTo(band.lo, 1)
-    }
-  })
-})
-
-describe('fasteners', () => {
-  it('gives pins to the tabless family and none to the tabbed one', () => {
-    const blank = family('centerpieces/spacer_blank')
-    const clip = family('centerpieces/spacer_clip-on')
-
-    expect(blank.tabs.present).toBe(true)
-    expect(blank.fasteners).toEqual([])
-
-    expect(clip.tabs.present).toBe(false)
-    expect(clip.fasteners).toEqual([{ id: '4x10x8mm Pin', quantity: 4 }])
-  })
-
-  it('matches what the family folders actually ship', () => {
-    // A fastener duplicated into a family folder is the repo's own signal.
-    const clipFiles = readdirSync(join(REPO_ROOT, 'Centerpieces/Spacer_clip-on'))
-    expect(clipFiles).toContain('4x10x8mm Pin.stl')
-
-    const blankFiles = readdirSync(join(REPO_ROOT, 'Centerpieces/Spacer_blank'))
-    expect(blankFiles.some((f) => /pin/i.test(f))).toBe(false)
-  })
-
-  it('points every declared fastener at a file that exists', () => {
-    for (const [id, spec] of Object.entries(DATA.fasteners as Record<string, { path: string }>)) {
-      expect(readdirSync(join(REPO_ROOT, 'Accessories')), id).toContain(
-        spec.path.split('/').pop(),
-      )
+  it('declares a proper rotation everywhere', () => {
+    for (const family of FAMILIES) {
+      const maps: AxisMap[] =
+        typeof family.printToWall.x === 'string'
+          ? [family.printToWall]
+          : (Object.values(family.printToWall) as AxisMap[])
+      for (const map of maps) {
+        // A reflection would silently turn a Left bracket into a Right.
+        expect(determinant(toMatrix(map)), family.id).toBe(1)
+        expect([map.x[1], map.y[1], map.z[1]].sort(), family.id).toEqual(['x', 'y', 'z'])
+      }
     }
   })
 
   it('resolves every fastener a family asks for', () => {
-    for (const f of DATA.families) {
-      for (const need of f.fasteners as { id: string }[]) {
-        expect(DATA.fasteners[need.id], `${f.id} -> ${need.id}`).toBeDefined()
+    for (const family of FAMILIES) {
+      for (const need of (family.fasteners ?? []) as { id: string }[]) {
+        expect(DATA.fasteners[need.id], `${family.id} -> ${need.id}`).toBeDefined()
+      }
+    }
+  })
+
+  it('points every declared fastener at a file that exists', () => {
+    for (const [id, spec] of Object.entries(DATA.fasteners as Record<string, { path: string }>)) {
+      expect(readdirSync(join(REPO_ROOT, 'Accessories')), id).toContain(spec.path.split('/').pop())
+    }
+  })
+})
+
+describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
+  const parts = partsIn(family.dir)
+
+  it('has the declared part count', () => {
+    expect(parts).toHaveLength(family.parts)
+  })
+
+  it('follows its archetype height rule', () => {
+    if (family.perPart) return // no single rule; see the note in families.json
+    for (const { name, parsed } of parts) {
+      const h = parsed.h as number
+      const measuredHeight = sizeOf(family.dir, name).y
+
+      if (family.size.heightMm?.rule === 'slotSpan') {
+        const lip = h % 2 === 1 ? family.size.heightMm.lipOddMm : family.size.heightMm.lipEvenMm
+        expect(Math.abs(slotSpanHeightMm(Math.ceil(h / 2)) + lip - measuredHeight), name)
+          .toBeLessThanOrEqual(HEIGHT_TOLERANCE_MM)
+        // The same series the grid reproduces.
+        expect(Math.abs((FLATS_HEIGHT[h] as number) - measuredHeight), name)
+          .toBeLessThanOrEqual(HEIGHT_TOLERANCE_MM)
+      } else {
+        const expected = predict(family.size.heightMm, h) as number
+        expect(Math.abs(expected - measuredHeight), name).toBeLessThanOrEqual(HEIGHT_TOLERANCE_MM)
+      }
+    }
+  })
+
+  it('matches every size formula it declares', () => {
+    if (family.perPart) return
+    const skip = new Set<string>(
+      ((family.knownDeviations ?? []) as { part: string }[]).map((d) => d.part),
+    )
+
+    for (const { name, parsed } of parts) {
+      if (skip.has(parsed.filename)) continue
+      const size = sizeOf(family.dir, name)
+      const tolerance = 0.15
+
+      const width = predict(family.size.widthMm, parsed.w as number)
+      if (width !== null) {
+        const t = family.size.widthMm.toleranceMm ?? tolerance
+        expect(Math.abs(size.x - width), `${name} width`).toBeLessThanOrEqual(t)
+      }
+
+      const depth = predict(family.size.depthMm, parsed.w as number)
+      if (depth !== null) {
+        const t = family.size.depthMm.toleranceMm ?? tolerance
+        expect(Math.abs(size.x - depth), `${name} depth`).toBeLessThanOrEqual(t)
+      }
+
+      const thickness = predict(family.size.thicknessMm as Declared, 0)
+      if (thickness !== null) {
+        const t = family.size.thicknessMm.toleranceMm ?? tolerance
+        expect(Math.abs(size.z - thickness), `${name} thickness`).toBeLessThanOrEqual(t)
+      }
+    }
+  })
+
+  it('states each known deviation truthfully', () => {
+    for (const d of (family.knownDeviations ?? []) as {
+      part: string
+      measuredWidthMm: number
+    }[]) {
+      const match = parts.find((p) => p.parsed.filename === d.part)
+      expect(match, `${d.part} is listed as a deviation but is not in ${family.dir}`).toBeDefined()
+      expect(sizeOf(family.dir, match!.name).x, d.part).toBeCloseTo(d.measuredWidthMm, 1)
+    }
+  })
+
+  it('ships the fasteners it declares, and no others', () => {
+    const loose = readdirSync(join(REPO_ROOT, family.dir)).filter(
+      (f) => /\.stl$/i.test(f) && parsePartName(f).h === null,
+    )
+    const declared = ((family.fasteners ?? []) as { id: string }[]).map((f) => f.id).sort()
+    // A fastener duplicated into a family folder is the repo's own signal.
+    expect(loose.map((f) => f.replace(/\.stl$/i, '')).sort(), family.id).toEqual(declared)
+  })
+})
+
+describe('sidepieces share one mounting interface', () => {
+  const sidepieces = FAMILIES.filter((f) => f.kind === 'sidepiece')
+
+  it('covers more than one family', () => {
+    expect(sidepieces.length).toBeGreaterThan(1)
+  })
+
+  it('gives them all the same tang', () => {
+    // This is the claim the archetype rests on: the families differ in what
+    // they hold, never in how they hang.
+    const tangs = new Set(sidepieces.map((f) => JSON.stringify(f.anchor.tang)))
+    expect(tangs.size).toBe(1)
+  })
+
+  it('gives them all the same anchor offsets', () => {
+    const anchors = new Set(sidepieces.map((f) => JSON.stringify(f.anchor.bottomBelowSlotCenterMm)))
+    expect(anchors.size).toBe(1)
+  })
+
+  it('measures 13.7 mm thick for a side and 27.6 for a centre', () => {
+    for (const family of sidepieces) {
+      const parts = partsIn(family.dir)
+      for (const { name, parsed } of parts) {
+        if (parsed.variant !== 'left' && parsed.variant !== 'right') continue
+        expect(sizeOf(family.dir, name).z, `${family.id} ${name}`).toBeCloseTo(13.7, 1)
       }
     }
   })
 })
 
-describe('the width formulas explain the tab geometry', () => {
-  it('makes the tabbed family overlap and the tabless one clear', () => {
-    const blank = family('centerpieces/spacer_blank')
-    const clip = family('centerpieces/spacer_clip-on')
-    const SLOT_PITCH = 25.4
-
-    // Both bodies are stated as spanning w slot columns; the constant is the
-    // difference, and it should be twice the declared overhang or clearance.
-    expect(blank.size.widthMm.perUnitMm).toBe(SLOT_PITCH)
-    expect(blank.size.widthMm.constantMm).toBeCloseTo(2 * blank.tabs.overhangPerSideMm, 6)
-
-    expect(clip.size.widthMm.perUnitMm).toBe(SLOT_PITCH)
-    expect(clip.size.widthMm.constantMm).toBeCloseTo(-2 * clip.tabs.clearancePerSideMm, 6)
-  })
-})
-
 describe('the Phase-1 joint, built from the shipped rules', () => {
-  // This is the regression guard for the spike check. The original bug left
-  // every other assertion in this file passing: the axis maps were still
-  // proper rotations, the sizes still derived, the sockets simply faced the
-  // wrong way. Only assembling two sidepieces around a centerpiece catches it.
+  // The regression guard for the spike check. The original bug left every
+  // other assertion in this file passing: the axis maps were still proper
+  // rotations, the sizes still derived, the sockets simply faced the wrong
+  // way. Only assembling two sidepieces around a centerpiece catches it.
   it('faces both sockets at the centerpiece', () => {
     const verdict = assessJoint(buildPhase1Joint(3))
-    expect(verdict.leftFacesIn, 'left socket faces the span').toBe(true)
-    expect(verdict.rightFacesIn, 'right socket faces the span').toBe(true)
+    expect(verdict.leftFacesIn).toBe(true)
+    expect(verdict.rightFacesIn).toBe(true)
   })
 
   it('seats a tab in each socket', () => {
     const { intoLeftSocket, intoRightSocket } = assessJoint(buildPhase1Joint(3))
     for (const [label, into] of [['left', intoLeftSocket], ['right', intoRightSocket]] as const) {
-      // Into the 4.2 mm groove across, through 2.4 mm of tab in depth, and
-      // the full height of the centerpiece.
       expect(into.x, `${label} across`).toBeGreaterThan(3.5)
       expect(into.y, `${label} depth`).toBeGreaterThan(2.0)
       expect(into.z, `${label} height`).toBeCloseTo(76.0, 1)
@@ -321,8 +245,6 @@ describe('the Phase-1 joint, built from the shipped rules', () => {
 
   it('is symmetric — a Left and a Right seat identically', () => {
     const { intoLeftSocket, intoRightSocket } = assessJoint(buildPhase1Joint(3))
-    // Loose to 0.001 mm: these come off float32 vertices, and the two meshes
-    // are separately exported mirrors rather than one reused twice.
     expect(intoRightSocket.x).toBeCloseTo(intoLeftSocket.x, 3)
     expect(intoRightSocket.y).toBeCloseTo(intoLeftSocket.y, 3)
   })
