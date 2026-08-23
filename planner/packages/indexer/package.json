@@ -15,7 +15,12 @@
     "spike": "tsx src/spike.ts"
   },
   "dependencies": {
-    "@ddd-planner/core": "*"
+    "@ddd-planner/core": "*",
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
+    "meshoptimizer": "^0.22.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

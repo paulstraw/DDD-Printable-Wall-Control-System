@@ -1,16 +1,19 @@
-// Indexer CLI. Walks the repo's STL directories and emits the web-loadable
-// part library: compressed glTF, WebP thumbnails and a single index.json.
-//
-// Nothing it writes is ever committed — CI runs this on every build.
+/**
+ * Indexer CLI — thin wrapper around runIndexer.
+ *
+ *   npm run index --workspace @ddd-planner/indexer
+ */
 
-import { MM_PER_INCH } from '@ddd-planner/core'
+import { DEFAULT_OUT_DIR, runIndexer } from './catalog'
 
-function main(argv: string[]): number {
-  const repoRoot = argv[0] ?? '../..'
-  console.log(`ddd-index: scaffold only, no parts written yet.`)
-  console.log(`  repo root : ${repoRoot}`)
-  console.log(`  grid unit : ${MM_PER_INCH} mm`)
-  return 0
-}
+const { index, stats, outDir } = await runIndexer(process.argv[2] ?? DEFAULT_OUT_DIR)
 
-process.exitCode = main(process.argv.slice(2))
+const kb = (n: number) => `${(n / 1024).toFixed(0)} kB`.padStart(8)
+const total = stats.modelBytes + stats.thumbBytes + stats.indexBytes
+
+console.log(`indexed ${index.parts.length} parts + ${Object.keys(index.fasteners).length} fasteners`)
+console.log(`  models ${kb(stats.modelBytes)}`)
+console.log(`  thumbs ${kb(stats.thumbBytes)}`)
+console.log(`  index  ${kb(stats.indexBytes)}`)
+console.log(`  total  ${kb(total)}   in ${(stats.elapsedMs / 1000).toFixed(1)} s`)
+console.log(`  -> ${outDir}`)
