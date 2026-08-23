@@ -1,0 +1,100 @@
+# Builds the wall planner and publishes it to GitHub Pages.
+#
+# The part library is not committed: this workflow derives it from the STLs in
+# the repository on every run, so the catalog can never drift from the parts.
+#
+# Pages must serve from a repository subpath, so the base URL is derived from
+# the repo name rather than hard-coded — the fork and upstream both work.
+
+name: Planner → Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'planner/**'
+      - '.github/workflows/planner-pages.yml'
+      # The catalog is generated from these, so a new part rebuilds the site.
+      - 'Sidepieces/**'
+      - 'Centerpieces/**'
+      - 'Quickhooks/**'
+      - 'Accessories/**'
+  pull_request:
+    paths:
+      - 'planner/**'
+      - '.github/workflows/planner-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: planner
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: planner/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build the part library from the STLs
+        run: npm run index --workspace @ddd-planner/indexer
+
+      # The geometry is the whole product. If the Phase-1 joint stops closing,
+      # the site should not publish.
+      - name: Spike check — do the parts still mate?
+        run: npm run spike --workspace @ddd-planner/indexer
+
+      - name: Build the site
+        run: npm run build
+        env:
+          PLANNER_BASE: /${{ github.event.repository.name }}/
+
+      - name: Report what will be published
+        run: |
+          echo "### Planner build" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          du -sh packages/app/dist >> "$GITHUB_STEP_SUMMARY"
+          du -sh packages/app/dist/parts >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: planner/packages/app/dist
+
+  deploy:
+    # A pull request should be checked, not published.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
