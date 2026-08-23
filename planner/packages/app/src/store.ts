@@ -14,6 +14,7 @@ export interface CatalogPart {
   triangles: number
   vertices: number
   volumeMm3: number
+  sourceBytes: number
   sizeMm: { x: number; y: number; z: number }
   model: string
   thumb: string
@@ -24,7 +25,7 @@ export interface CatalogPart {
 export interface CatalogFile {
   schemaVersion: number
   families: { id: string; label: string; kind: string; dir: string }[]
-  fasteners: Record<string, { id: string; file: string; model: string; thumb: string; volumeMm3: number }>
+  fasteners: Record<string, { id: string; file: string; model: string; thumb: string; volumeMm3: number; sourceBytes: number }>
   parts: CatalogPart[]
 }
 

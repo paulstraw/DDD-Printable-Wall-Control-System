@@ -6,7 +6,7 @@
  * index.json. Nothing it produces is committed — CI runs this on every build.
  */
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -46,6 +46,8 @@ export interface PartRow {
   triangles: number
   vertices: number
   volumeMm3: number
+  /** Size of the source STL, so the app can estimate a download before starting. */
+  sourceBytes: number
   sizeMm: { x: number; y: number; z: number }
   model: string
   thumb: string
@@ -136,7 +138,10 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
   mkdirSync(join(outDir, 'thumbs'), { recursive: true })
 
   const parts: PartRow[] = []
-  const fasteners: Record<string, { id: string; file: string; model: string; thumb: string; volumeMm3: number }> = {}
+  const fasteners: Record<
+    string,
+    { id: string; file: string; model: string; thumb: string; volumeMm3: number; sourceBytes: number }
+  > = {}
   let modelBytes = 0
   let thumbBytes = 0
 
@@ -146,7 +151,9 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
 
     for (const file of files) {
       const parsed = parsePartName(file)
-      const mesh = readStlFile(join(REPO_ROOT, dir, file))
+      const sourcePath = join(REPO_ROOT, dir, file)
+      const mesh = readStlFile(sourcePath)
+      const sourceBytes = statSync(sourcePath).size
 
       // Files with no grid dimensions in these folders are the fasteners the
       // family needs, duplicated in from Accessories/. Index each one once.
@@ -189,6 +196,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
           model,
           thumb,
           volumeMm3: Number(mesh.volumeMm3.toFixed(2)),
+          sourceBytes,
         }
         continue
       }
@@ -208,6 +216,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         triangles: glb.triangleCount,
         vertices: glb.vertexCount,
         volumeMm3: Number(mesh.volumeMm3.toFixed(2)),
+        sourceBytes,
         sizeMm: {
           x: Number((size.max.x - size.min.x).toFixed(2)),
           y: Number((size.max.y - size.min.y).toFixed(2)),

@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { NodeIO } from '@gltf-transform/core'
 import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions'
 import { MeshoptDecoder } from 'meshoptimizer'
+import { REPO_ROOT } from '../src/assembly'
 import { runIndexer } from '../src/catalog'
 import { faceNormals, meshToGlb } from '../src/gltf'
 import { renderRgba } from '../src/thumbnail'
@@ -169,6 +170,17 @@ describe('the indexer, end to end', () => {
       expect(part.id, part.name).toMatch(/^[a-z0-9-]+$/)
       expect(ids.has(part.id), `duplicate id ${part.id}`).toBe(false)
       ids.add(part.id)
+    }
+  })
+
+  it('records the source STL size so a download can be estimated first', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    for (const part of index.parts) {
+      const onDisk = statSync(join(REPO_ROOT, part.file)).size
+      expect(part.sourceBytes, part.name).toBe(onDisk)
+    }
+    for (const fastener of Object.values(index.fasteners) as { file: string; sourceBytes: number }[]) {
+      expect(fastener.sourceBytes).toBe(statSync(join(REPO_ROOT, fastener.file)).size)
     }
   })
 

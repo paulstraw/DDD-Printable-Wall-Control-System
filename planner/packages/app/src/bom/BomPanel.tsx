@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { bomToCsv, bomToMarkdown, buildBom } from '@ddd-planner/core'
+import { bomToCsv, bomToMarkdown, buildBom, estimateDownload, formatBytes } from '@ddd-planner/core'
 import { useStore } from '../store'
+import { type DownloadFile, useDownload } from './useDownload'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
@@ -33,9 +34,25 @@ function CopyButton({ label, text }: { label: string; text: string }) {
  * Fasteners are not placed on the wall — they are implied by the families that
  * are, so they appear here without anyone having to remember them.
  */
+function downloadLabel(status: ReturnType<typeof useDownload>['status'], estimate: { fileCount: number; totalBytes: number }): string {
+  switch (status.phase) {
+    case 'fetching':
+      return `Fetching ${status.done}/${status.total}…`
+    case 'zipping':
+      return 'Zipping…'
+    case 'done':
+      return 'Downloaded'
+    case 'error':
+      return 'Retry download'
+    default:
+      return `Download ${estimate.fileCount} STL${estimate.fileCount === 1 ? '' : 's'}`
+  }
+}
+
 export function BomPanel() {
   const catalog = useStore((s) => s.catalog)
   const placements = useStore((s) => s.placements)
+  const { status, download } = useDownload()
 
   const bom = useMemo(
     () =>
@@ -48,6 +65,28 @@ export function BomPanel() {
   )
 
   const lines = [...bom.parts, ...bom.fasteners]
+
+  // Sizes come from the index, so the estimate is exact before a byte moves.
+  const downloadFiles = useMemo<DownloadFile[]>(() => {
+    const sizes = new Map<string, number>()
+    for (const part of catalog?.parts ?? []) sizes.set(part.file, part.sourceBytes)
+    for (const f of Object.values(catalog?.fasteners ?? {})) sizes.set(f.file, f.sourceBytes)
+    return bom.files.map((path) => ({ path, sizeBytes: sizes.get(path) ?? null }))
+  }, [bom.files, catalog])
+
+  const estimate = estimateDownload(downloadFiles)
+  const busy = status.phase === 'fetching' || status.phase === 'zipping'
+
+  async function onDownload() {
+    if (estimate.isLarge) {
+      const proceed = window.confirm(
+        `This will fetch ${estimate.fileCount} files, about ${formatBytes(estimate.totalBytes)}, ` +
+          'and build the archive in memory. On a phone that may be slow. Continue?',
+      )
+      if (!proceed) return
+    }
+    await download(downloadFiles)
+  }
 
   return (
     <aside className="bom">
@@ -83,10 +122,17 @@ export function BomPanel() {
             </li>
           </ul>
 
-          <p className="bom-note">
-            {bom.files.length} distinct STL{bom.files.length === 1 ? '' : 's'} to download.
-            Filament assumes solid parts, so it is an upper bound.
-          </p>
+          <div className="bom-foot">
+            <button type="button" className="download" onClick={onDownload} disabled={busy}>
+              {downloadLabel(status, estimate)}
+            </button>
+            <p className="bom-note">
+              {estimate.totalBytes > 0 ? `${formatBytes(estimate.totalBytes)} of STLs, ` : ''}
+              fetched from jsDelivr and zipped in your browser. Filament assumes solid parts,
+              so it is an upper bound.
+            </p>
+            {status.phase === 'error' ? <p className="bom-error">{status.message}</p> : null}
+          </div>
         </>
       )}
     </aside>

@@ -398,3 +398,42 @@ canvas {
   color: var(--ink);
 }
 
+
+.bom-foot {
+  border-top: 1px solid var(--line);
+  padding: 0.7rem;
+}
+
+.download {
+  width: 100%;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 550;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid #23272e;
+  border-radius: 6px;
+  background: #23272e;
+  color: #fff;
+  cursor: pointer;
+}
+
+.download:hover:not(:disabled) {
+  background: #343a43;
+}
+
+.download:disabled {
+  background: #9aa1ab;
+  border-color: #9aa1ab;
+  cursor: default;
+}
+
+.bom-foot .bom-note {
+  padding: 0.5rem 0 0;
+}
+
+.bom-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #8a4b2a;
+}
