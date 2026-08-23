@@ -232,6 +232,43 @@ describe('the indexer, end to end', () => {
     }
   })
 
+  it('flags every horizontal-panel part as unsupported, wherever it lives', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const unsupported = index.parts.filter((p: { supported: boolean }) => !p.supported)
+
+    expect(unsupported).toHaveLength(19)
+    for (const part of unsupported) {
+      expect(part.unsupportedReason, part.name).toMatch(/horizontal/i)
+      // Still indexed, still downloadable — flagged, not dropped.
+      expect(part.model, part.name).toBeTruthy()
+    }
+
+    // Two families, not one folder.
+    const families = new Set(unsupported.map((p: { family: string }) => p.family))
+    expect(families.size).toBe(2)
+  })
+
+  it('leaves every other part supported', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const supported = index.parts.filter((p: { supported: boolean }) => p.supported)
+    expect(supported).toHaveLength(541 - 19)
+    for (const part of supported.slice(0, 50)) expect(part.unsupportedReason).toBeUndefined()
+  })
+
+  it('gives a lock pin to the locking retainers and not the plain ones', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const retainers = index.parts.filter(
+      (p: { family: string }) => p.family === 'sidepieces/retainers',
+    )
+    const withPin = retainers.filter((p: { fasteners: unknown[] }) => p.fasteners.length > 0)
+    expect(retainers).toHaveLength(15)
+    expect(withPin).toHaveLength(10)
+    for (const part of withPin) {
+      expect(part.name.toLowerCase(), part.name).toContain('locking retainer')
+      expect(part.fasteners).toEqual([{ id: '8mm Lock Pin', quantity: 1 }])
+    }
+  })
+
   it('attaches fasteners only to the family that needs them', async () => {
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
     const clip = index.parts.filter((p: { family: string }) => p.family === 'centerpieces/spacer_clip-on')

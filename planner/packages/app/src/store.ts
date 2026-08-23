@@ -19,6 +19,8 @@ export interface CatalogPart {
   model: string
   thumb: string
   fasteners: { id: string; quantity: number }[]
+  supported: boolean
+  unsupportedReason?: string
   placement: PlacementRule
 }
 

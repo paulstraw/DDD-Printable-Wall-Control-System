@@ -437,3 +437,17 @@ canvas {
   line-height: 1.45;
   color: #8a4b2a;
 }
+
+/* A part the planner cannot position: listed, findable, downloadable, but
+   marked so nobody trusts where it lands. The badge sits outside the name so
+   the name can truncate without taking the badge with it. */
+.tag.warn {
+  color: #8a4b2a;
+  background: #fdeee4;
+  flex: none;
+  margin-left: 0;
+}
+
+.warn-note {
+  color: #8a4b2a;
+}

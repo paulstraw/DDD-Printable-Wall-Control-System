@@ -210,9 +210,71 @@ describe.each(FAMILIES.map((f) => [f.id, f] as const))('%s', (_id, family) => {
     const loose = readdirSync(join(REPO_ROOT, family.dir)).filter(
       (f) => /\.stl$/i.test(f) && parsePartName(f).h === null,
     )
-    const declared = ((family.fasteners ?? []) as { id: string }[]).map((f) => f.id).sort()
+    // Everything the family can call for, whether every part needs it or only
+    // some of them — Retainers ships a lock pin that only its locking
+    // variants use.
+    const declared = [
+      ...((family.fasteners ?? []) as { id: string }[]),
+      ...((family.fastenerRules ?? []) as { fasteners: { id: string }[] }[]).flatMap(
+        (r) => r.fasteners,
+      ),
+    ]
+      .map((f) => f.id)
+      .filter((id, i, all) => all.indexOf(id) === i)
+      .sort()
+
     // A fastener duplicated into a family folder is the repo's own signal.
     expect(loose.map((f) => f.replace(/\.stl$/i, '')).sort(), family.id).toEqual(declared)
+  })
+})
+
+describe('unsupported parts', () => {
+  const rules = (DATA.unsupported ?? []) as { match: string; reason: string }[]
+
+  it('declares at least one rule, with a reason', () => {
+    expect(rules.length).toBeGreaterThan(0)
+    for (const rule of rules) {
+      expect(rule.match.length).toBeGreaterThan(0)
+      expect(rule.reason.length).toBeGreaterThan(20)
+    }
+  })
+
+  it('catches every horizontal-panel part in the library, not just one folder', () => {
+    // Fourteen live in the horizontal folder; five more are Locking Retainers
+    // filed under Sidepieces/Retainers. Matching on the folder would miss those.
+    const matched: string[] = []
+    for (const family of FAMILIES) {
+      for (const { parsed } of partsIn(family)) {
+        const name = parsed.filename.toLowerCase()
+        if (rules.some((r) => name.includes(r.match.toLowerCase()))) matched.push(parsed.filename)
+      }
+    }
+    expect(matched).toHaveLength(19)
+    expect(matched.filter((n) => /retainer/i.test(n))).toHaveLength(5)
+  })
+
+  it('matches case-insensitively, because the library is inconsistent', () => {
+    // "for horizontal Wall Control" in one folder, "for Horizontal Wall
+    // Control" in the other.
+    const rule = rules.find((r) => r.match === 'horizontal wall control')
+    expect(rule).toBeDefined()
+    expect('3x1 Locking Spacer for horizontal Wall Control'.toLowerCase()).toContain(rule!.match)
+    expect('2x1 Locking Retainer for Horizontal Wall Control'.toLowerCase()).toContain(rule!.match)
+  })
+})
+
+describe('per-part fastener rules', () => {
+  it('gives a pin only to the locking retainers', () => {
+    // Sidepieces/README.md: a standard retainer needs nothing.
+    const family = FAMILIES.find((f) => f.id === 'sidepieces/retainers')
+    expect(family.fasteners).toEqual([])
+    const rule = (family.fastenerRules as { match: string }[])[0]
+    expect(rule?.match).toBe('locking retainer')
+
+    const parts = partsIn(family).map((p) => p.parsed.filename)
+    const locking = parts.filter((n) => n.toLowerCase().includes('locking retainer'))
+    expect(locking).toHaveLength(10)
+    expect(parts.length - locking.length).toBe(5)
   })
 })
 

@@ -18,7 +18,7 @@ import {
   parsePartName,
   placeBounds,
 } from '@ddd-planner/core'
-import { PLANNER_ROOT, REPO_ROOT, resolvedFamilies } from './assembly'
+import { PLANNER_ROOT, REPO_ROOT, loadFamilies, resolvedFamilies } from './assembly'
 import { meshToGlb } from './gltf'
 import { readStlFile } from './stl'
 import { renderWebp } from './thumbnail'
@@ -52,6 +52,9 @@ export interface PartRow {
   model: string
   thumb: string
   fasteners: { id: string; quantity: number }[]
+  /** False when the planner cannot position this part meaningfully. */
+  supported: boolean
+  unsupportedReason?: string
   /** Resolved from the family rules so the app never reads families.json. */
   placement: PlacementRule
 }
@@ -97,6 +100,36 @@ function placementFor(
   }
 }
 
+interface UnsupportedRule {
+  match: string
+  reason: string
+}
+
+/**
+ * Whether the planner can place a part at all.
+ *
+ * Matched on the part's name rather than its folder: the horizontal-panel
+ * parts are split across two families, so flagging a directory would quietly
+ * miss five of them.
+ */
+function unsupportedReasonFor(rules: readonly UnsupportedRule[], name: string): string | undefined {
+  const haystack = name.toLowerCase()
+  return rules.find((r) => haystack.includes(r.match.toLowerCase()))?.reason
+}
+
+/**
+ * A family's fasteners, plus any that apply only to some of its parts. A
+ * standard retainer needs nothing; the locking variants take a pin.
+ */
+function fastenersFor(family: Record<string, unknown>, name: string): { id: string; quantity: number }[] {
+  const base = (family.fasteners as { id: string; quantity: number }[]) ?? []
+  const rules =
+    (family.fastenerRules as { match: string; fasteners: { id: string; quantity: number }[] }[]) ?? []
+  const haystack = name.toLowerCase()
+  const extra = rules.filter((r) => haystack.includes(r.match.toLowerCase())).flatMap((r) => r.fasteners)
+  return [...base, ...extra]
+}
+
 function mapFor(family: Record<string, unknown>, variant: string | null): AxisMap {
   const p = family.printToWall as AxisMap | Record<string, AxisMap>
   if (typeof (p as AxisMap).x === 'string') return p as AxisMap
@@ -116,6 +149,7 @@ export interface IndexStats {
 export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
   const started = Date.now()
   const families = resolvedFamilies()
+  const unsupportedRules = (loadFamilies() as unknown as { unsupported?: UnsupportedRule[] }).unsupported ?? []
 
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(join(outDir, 'models'), { recursive: true })
@@ -213,7 +247,11 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         },
         model,
         thumb,
-        fasteners: (family.fasteners as { id: string; quantity: number }[]) ?? [],
+        fasteners: fastenersFor(family, parsed.filename),
+        supported: unsupportedReasonFor(unsupportedRules, parsed.filename) === undefined,
+        ...(unsupportedReasonFor(unsupportedRules, parsed.filename) !== undefined
+          ? { unsupportedReason: unsupportedReasonFor(unsupportedRules, parsed.filename) }
+          : {}),
         placement: placementFor(family, parsed, { widthMm, depthMm }),
       })
     }

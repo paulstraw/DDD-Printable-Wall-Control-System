@@ -32,7 +32,11 @@ export function App() {
         <span className="hint">
           {selectedPart ? (
             <>
-              <strong>{selectedPart.name}</strong> · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
+              <strong>{selectedPart.name}</strong>
+              {selectedPart.supported === false ? (
+                <span className="warn-note"> · for a horizontal panel — position is not meaningful</span>
+              ) : null}{' '}
+              · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
             </>
           ) : (
             <>

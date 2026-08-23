@@ -29,6 +29,14 @@
     "depthDatum": "Front-flush at the mounting interface. A sidepiece's front face is -(its own depth - tang.depthMm), so a bracket that projects 67 mm sits further out than a flat that projects 18.7 mm. A centerpiece uses the interface depth itself, which is what lands its tab in the socket."
   },
 
+  "unsupported": [
+    {
+      "match": "horizontal wall control",
+      "reason": "Made for a horizontal Wall Control panel, where the slots run the other way. These locate on the 1/4 inch pegboard holes rather than the vertical slots, so the planner cannot position them meaningfully. They stay in the catalog so you can still find and download them.",
+      "matchNote": "Matched on the part name, case-insensitively, not on the folder. Fourteen of these live in Centerpieces/Locking_spacer_for_horizontal_Wall_Control, but five more are Locking Retainers filed under Sidepieces/Retainers - flagging the folder alone would have missed them."
+    }
+  ],
+
   "fasteners": {
     "4x10x8mm Pin": {
       "path": "Accessories/4x10x8mm Pin.stl",
@@ -190,7 +198,14 @@
         "thicknessMm": { "constant": 6.15, "toleranceMm": 0.25 }
       },
       "archetypeNote": "Filed under Sidepieces but it is not one: it has no tang, and its height follows the centerpiece rule 25.4h - 0.2 rather than the Flats series. It clips onto an assembly, so it takes the centerpiece archetype.",
-      "fasteners": [{ "id": "8mm Lock Pin", "quantity": 2 }]
+      "fasteners": [],
+      "fastenerRules": [
+        {
+          "match": "locking retainer",
+          "fasteners": [{ "id": "8mm Lock Pin", "quantity": 1 }],
+          "note": "Sidepieces/README.md: a standard retainer just holds the sidepiece against the board and needs nothing. Only the wider locking retainers take the 8 mm lock pin."
+        }
+      ]
     },
 
     {
@@ -270,7 +285,8 @@
       "parts": 42,
       "size": { "thicknessMm": { "constant": 6.15 } },
       "sizeNote": "Widths span 1-14 columns and do not fit one formula; measured per part.",
-      "fasteners": [{ "id": "8mm Lock Pin", "quantity": 2 }]
+      "fasteners": [{ "id": "8mm Lock Pin", "quantity": 1 }],
+      "fastenersNote": "Centerpieces/Locking_spacer/README.md describes an array of threaded holes and one positive-lock pin screwed into any of them. One is the minimum that locks the part; using more is the owner's choice, so one is what the print list claims."
     },
     {
       "id": "centerpieces/u_hooks",

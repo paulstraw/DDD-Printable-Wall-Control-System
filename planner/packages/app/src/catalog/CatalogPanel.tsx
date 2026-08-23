@@ -107,10 +107,19 @@ export function CatalogPanel() {
               type="button"
               className={dragging === part.id ? 'part dragging' : 'part'}
               onPointerDown={() => beginDrag(part.id)}
-              title={`${part.name} — drag onto the wall`}
+              title={
+                part.unsupportedReason
+                  ? `${part.name} — ${part.unsupportedReason}`
+                  : `${part.name} — drag onto the wall`
+              }
             >
               <img src={`${PARTS_BASE}${part.thumb}`} alt="" width={44} height={44} draggable={false} />
               <span className="part-name">{part.name}</span>
+              {part.supported === false ? (
+                <span className="tag warn" title={part.unsupportedReason}>
+                  horizontal
+                </span>
+              ) : null}
               <span className="part-meta">
                 {part.h !== null ? `${part.h}×${part.w}` : '—'}
               </span>
