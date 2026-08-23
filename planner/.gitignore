@@ -10,3 +10,4 @@ packages/indexer/out/
 *.gltf
 *.webp
 index.json
+spike.svg
