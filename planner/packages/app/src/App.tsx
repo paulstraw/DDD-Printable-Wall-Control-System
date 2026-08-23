@@ -1,21 +1,45 @@
-import { OrbitControls } from '@react-three/drei'
+import { useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { MM_PER_INCH } from '@ddd-planner/core'
+import { createBoard, slotColumnCount, slotRowCount } from '@ddd-planner/core'
+import { Scene } from './scene/Scene'
+import { WallSizeControls } from './ui/WallSizeControls'
 
-// Scaffold scene. The real pegboard, catalog and BOM panels land in later tasks;
-// this exists so the toolchain (React + r3f + drei + workspace import) is proven.
 export function App() {
+  const [size, setSize] = useState({ widthIn: 32, heightIn: 32 })
+  const board = useMemo(() => createBoard(size.widthIn, size.heightIn), [size])
+
+  const cols = slotColumnCount(board)
+  const rows = slotRowCount(board)
+
   return (
     <div className="app">
-      <Canvas camera={{ position: [0, 0, 600], fov: 45 }}>
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[200, 300, 400]} intensity={1.2} />
-        <mesh>
-          <boxGeometry args={[MM_PER_INCH * 16, MM_PER_INCH * 32, 1.587]} />
-          <meshStandardMaterial color="#7a8a99" />
-        </mesh>
-        <OrbitControls makeDefault />
-      </Canvas>
+      <header className="bar">
+        <h1>Wall planner</h1>
+        <WallSizeControls widthIn={size.widthIn} heightIn={size.heightIn} onChange={setSize} />
+        <span className="count">
+          {cols} × {rows} slots
+        </span>
+        <span className="hint">
+          drag to orbit · scroll to zoom · <kbd>F</kbd> to face the wall
+        </span>
+      </header>
+
+      <div className="viewport">
+        <Canvas
+          shadows
+          dpr={[1, 2]}
+          camera={{
+            // Z is up in wall space, so the camera has to be told.
+            up: [0, 0, 1],
+            position: [board.widthMm * 0.5, -board.heightMm * 1.35, board.heightMm * 0.95],
+            fov: 45,
+            near: 1,
+            far: 20000,
+          }}
+        >
+          <Scene board={board} />
+        </Canvas>
+      </div>
     </div>
   )
 }
