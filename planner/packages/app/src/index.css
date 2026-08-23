@@ -101,3 +101,161 @@ canvas {
   display: block;
   touch-action: none;
 }
+
+/* ---------------------------------------------------------------- layout */
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.viewport {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------- catalog */
+
+.catalog {
+  width: 17.5rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--bar);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+.catalog-head {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.catalog-head input[type='search'] {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.facet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.facet-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.chip {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.14rem 0.42rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: #b9c0c9;
+  color: var(--ink);
+}
+
+.chip.on {
+  background: #23272e;
+  border-color: #23272e;
+  color: #fff;
+}
+
+.result-count {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.catalog-error {
+  margin: 0;
+  padding: 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #8a4b2a;
+  background: #fdf3ec;
+  border-bottom: 1px solid #f0dccd;
+}
+
+.parts {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.part {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: grab;
+}
+
+.part:hover {
+  background: #f1f3f6;
+  border-color: var(--line);
+}
+
+.part.dragging {
+  background: #fdf1e4;
+  border-color: #e6b98c;
+  cursor: grabbing;
+}
+
+.part img {
+  border-radius: 5px;
+  background: #f4f6f8;
+  flex: none;
+}
+
+.part-name {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.part-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex: none;
+}

@@ -1,44 +1,63 @@
-import { useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { createBoard, slotColumnCount, slotRowCount } from '@ddd-planner/core'
+import { slotColumnCount, slotRowCount } from '@ddd-planner/core'
+import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
+import { partById, useStore } from './store'
+import { useKeyboard } from './useKeyboard'
 import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
-  const [size, setSize] = useState({ widthIn: 32, heightIn: 32 })
-  const board = useMemo(() => createBoard(size.widthIn, size.heightIn), [size])
+  useKeyboard()
 
-  const cols = slotColumnCount(board)
-  const rows = slotRowCount(board)
+  const board = useStore((s) => s.board)
+  const widthIn = useStore((s) => s.widthIn)
+  const heightIn = useStore((s) => s.heightIn)
+  const setWallSize = useStore((s) => s.setWallSize)
+  const placements = useStore((s) => s.placements)
+  const catalog = useStore((s) => s.catalog)
+  const selectedId = useStore((s) => s.selectedId)
+
+  const selected = placements.find((p) => p.id === selectedId) ?? null
+  const selectedPart = partById(catalog, selected?.partId ?? null)
 
   return (
     <div className="app">
       <header className="bar">
         <h1>Wall planner</h1>
-        <WallSizeControls widthIn={size.widthIn} heightIn={size.heightIn} onChange={setSize} />
+        <WallSizeControls widthIn={widthIn} heightIn={heightIn} onChange={setWallSize} />
         <span className="count">
-          {cols} × {rows} slots
+          {slotColumnCount(board)} × {slotRowCount(board)} slots · {placements.length} placed
         </span>
         <span className="hint">
-          drag to orbit · scroll to zoom · <kbd>F</kbd> to face the wall
+          {selectedPart ? (
+            <>
+              <strong>{selectedPart.name}</strong> · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
+            </>
+          ) : (
+            <>
+              drag a part onto the wall · <kbd>F</kbd> to face it
+            </>
+          )}
         </span>
       </header>
 
-      <div className="viewport">
-        <Canvas
-          shadows
-          dpr={[1, 2]}
-          camera={{
-            // Z is up in wall space, so the camera has to be told.
-            up: [0, 0, 1],
-            position: [board.widthMm * 0.5, -board.heightMm * 1.35, board.heightMm * 0.95],
-            fov: 45,
-            near: 1,
-            far: 20000,
-          }}
-        >
-          <Scene board={board} />
-        </Canvas>
+      <div className="body">
+        <CatalogPanel />
+        <div className="viewport">
+          <Canvas
+            dpr={[1, 2]}
+            camera={{
+              // Z is up in wall space, so the camera has to be told.
+              up: [0, 0, 1],
+              position: [board.widthMm * 0.5, -board.heightMm * 1.35, board.heightMm * 0.95],
+              fov: 45,
+              near: 1,
+              far: 20000,
+            }}
+          >
+            <Scene board={board} />
+          </Canvas>
+        </div>
       </div>
     </div>
   )

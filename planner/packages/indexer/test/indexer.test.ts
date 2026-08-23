@@ -172,6 +172,36 @@ describe('the indexer, end to end', () => {
     }
   })
 
+  it('bakes a placement rule the app can use without families.json', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const by = (name: string) => index.parts.find((p: { name: string }) => p.name === name)
+
+    // A Left hangs its body to -x from the slot; a Right to +x. These are the
+    // numbers the spike check confirmed the joint closes on.
+    expect(by('3x0 Flat Left').placement.offsetFromSlotXMm).toBeCloseTo(-12.6, 2)
+    expect(by('3x0 Flat Right').placement.offsetFromSlotXMm).toBeCloseTo(-1.1, 2)
+    expect(by('3x0 Flat Center').placement.offsetFromSlotXMm).toBeCloseTo(-26.5, 2)
+
+    // A tabbed centerpiece overhangs its span by 2.7 a side; a tabless one
+    // clears it by 1.2.
+    expect(by('3x3 Spacer blank').placement.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
+    expect(by('3x3 Spacer clip-on').placement.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
+
+    // Everything shares one front face, which is what seats the tabs.
+    const faces = new Set(
+      index.parts.map((p: { placement: { frontFaceYMm: number } }) => p.placement.frontFaceYMm),
+    )
+    expect(faces.size).toBe(1)
+  })
+
+  it('gives a centerpiece the columns it spans and a sidepiece one', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    for (const part of index.parts) {
+      const expected = part.family.startsWith('sidepieces/') ? 1 : Math.round(part.w)
+      expect(part.placement.occupiesColumns, part.name).toBe(expected)
+    }
+  })
+
   it('attaches fasteners only to the family that needs them', async () => {
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
     const clip = index.parts.filter((p: { family: string }) => p.family === 'centerpieces/spacer_clip-on')

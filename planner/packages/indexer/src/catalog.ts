@@ -9,7 +9,15 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { type AxisMap, type Bounds, applyMatrix, parsePartName, placeBounds } from '@ddd-planner/core'
+import {
+  type AxisMap,
+  type Bounds,
+  type PlacementRule,
+  COLUMN_PITCH_MM,
+  applyMatrix,
+  parsePartName,
+  placeBounds,
+} from '@ddd-planner/core'
 import { PLANNER_ROOT, REPO_ROOT, loadFamilies } from './assembly'
 import { meshToGlb } from './gltf'
 import { readStlFile } from './stl'
@@ -42,6 +50,65 @@ export interface PartRow {
   model: string
   thumb: string
   fasteners: { id: string; quantity: number }[]
+  /** Resolved from the family rules so the app never reads families.json. */
+  placement: PlacementRule
+}
+
+/**
+ * The front face is shared between a centerpiece and the sidepieces holding
+ * it, so a centerpiece family declares that it matches rather than repeating
+ * the number. Phase 1 has one sidepiece family to take it from.
+ */
+function frontFaceYFor(family: Record<string, unknown>, families: readonly Record<string, unknown>[]): number {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const own = (family as any).anchor?.depth
+  if (typeof own?.frontFaceYMm === 'number') return own.frontFaceYMm
+
+  for (const other of families) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const depth = (other as any).anchor?.depth
+    if (other.kind === 'sidepiece' && typeof depth?.frontFaceYMm === 'number') return depth.frontFaceYMm
+  }
+  throw new Error(`family ${String(family.id)} has no front face and no sidepiece to borrow one from`)
+}
+
+/**
+ * Collapse the family rule plus this part's own dimensions into the single
+ * translation the app needs. A sidepiece hangs its body off one side of its
+ * slot; a centerpiece is centred on the columns it spans, which is what makes
+ * a tabbed family overhang and a tabless one clear.
+ */
+function placementFor(
+  family: Record<string, unknown>,
+  families: readonly Record<string, unknown>[],
+  parsed: { h: number | null; w: number | null; variant: string | null },
+  measuredWidthMm: number,
+): PlacementRule {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rule = family as any
+  const frontFaceYMm = frontFaceYFor(family, families)
+  const bottomBelowSlotCenterMm = rule.anchor.bottomBelowSlotCenterMm
+
+  if (family.kind === 'sidepiece') {
+    const half = rule.anchor.tang.widthMm / 2
+    const variant = (parsed.variant ?? 'left') as 'left' | 'right' | 'center'
+    const thickness = rule.size.thicknessMm[variant] ?? rule.size.thicknessMm.left
+    const extends_ = rule.anchor.bodyExtendsFromSlot[variant] ?? '-x'
+    return {
+      occupiesColumns: 1,
+      offsetFromSlotXMm: extends_ === '+x' ? -half : half - thickness,
+      frontFaceYMm,
+      bottomBelowSlotCenterMm,
+    }
+  }
+
+  const columns = Math.max(1, Math.round(parsed.w ?? 1))
+  return {
+    occupiesColumns: columns,
+    offsetFromSlotXMm: (COLUMN_PITCH_MM * columns - measuredWidthMm) / 2,
+    frontFaceYMm,
+    bottomBelowSlotCenterMm,
+  }
 }
 
 function mapFor(family: Record<string, unknown>, variant: string | null): AxisMap {
@@ -127,6 +194,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       }
 
       const size = placed.bounds
+      const widthMm = size.max.x - size.min.x
       parts.push({
         id,
         family: family.id as string,
@@ -148,6 +216,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         model,
         thumb,
         fasteners: (family.fasteners as { id: string; quantity: number }[]) ?? [],
+        placement: placementFor(family, families, parsed, widthMm),
       })
     }
   }

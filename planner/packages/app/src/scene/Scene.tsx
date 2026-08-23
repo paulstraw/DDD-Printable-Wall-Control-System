@@ -1,6 +1,9 @@
 import { OrbitControls } from '@react-three/drei'
 import type { Board } from '@ddd-planner/core'
+import { useStore } from '../store'
+import { DragGhost, DropTarget } from './DropTarget'
 import { Pegboard } from './Pegboard'
+import { PlacedParts } from './PlacedParts'
 import { useFaceOn } from './useFaceOn'
 
 function CameraRig({ board }: { board: Board }) {
@@ -10,6 +13,8 @@ function CameraRig({ board }: { board: Board }) {
 
 export function Scene({ board }: { board: Board }) {
   const centre: [number, number, number] = [board.widthMm / 2, 0, board.heightMm / 2]
+  // A drag that crosses the canvas must not also swing the camera.
+  const dragging = useStore((s) => s.draggingPartId !== null)
 
   return (
     <>
@@ -19,8 +24,17 @@ export function Scene({ board }: { board: Board }) {
       <directionalLight position={[700, -500, 300]} intensity={0.5} />
 
       <Pegboard board={board} />
+      <DropTarget board={board} />
+      <PlacedParts />
+      <DragGhost />
 
-      <OrbitControls makeDefault target={centre} enableDamping dampingFactor={0.12} />
+      <OrbitControls
+        makeDefault
+        target={centre}
+        enabled={!dragging}
+        enableDamping
+        dampingFactor={0.12}
+      />
       <CameraRig board={board} />
     </>
   )
