@@ -8,5 +8,4 @@
 
 export const CORE_PACKAGE = '@ddd-planner/core'
 
-/** Millimetres per inch. The Wall Control grid is an imperial pattern. */
-export const MM_PER_INCH = 25.4
+export * from './grid'
