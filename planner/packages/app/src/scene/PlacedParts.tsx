@@ -4,7 +4,7 @@ import { PartModel } from './PartModel'
 export function PlacedParts() {
   const catalog = useStore((s) => s.catalog)
   const placements = useStore((s) => s.placements)
-  const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
   const select = useStore((s) => s.select)
 
   return (
@@ -18,8 +18,10 @@ export function PlacedParts() {
             part={part}
             col={placement.col}
             row={placement.row}
-            selected={placement.id === selectedId}
-            onSelect={() => select(placement.id)}
+            selected={selectedIds.includes(placement.id)}
+            onSelect={(additive) =>
+              select(placement.id, additive ? 'toggle' : 'replace')
+            }
           />
         )
       })}

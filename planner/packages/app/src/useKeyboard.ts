@@ -8,21 +8,32 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
- * Arrow keys nudge the selection by one slot; Delete removes it; Escape
- * deselects or abandons a drag.
+ * Arrow keys nudge the selection by one slot; Delete removes it; Cmd/Ctrl+A
+ * takes everything; Escape deselects or abandons a drag.
  *
  * A nudge is a whole slot, not a pixel — there is nowhere else a part can go,
- * so free movement would only ever be undone by the snap.
+ * so free movement would only ever be undone by the snap. Every one of these
+ * acts on the whole selection, because a selection of one is not a special
+ * case.
  */
 export function useKeyboard() {
   const nudge = useStore((s) => s.nudge)
   const removeSelected = useStore((s) => s.removeSelected)
   const select = useStore((s) => s.select)
   const cancelDrag = useStore((s) => s.cancelDrag)
+  const selectAll = useStore((s) => s.selectAll)
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (isTyping(event.target)) return
+
+      // Cmd/Ctrl+A, before the plain-key switch so the browser's own
+      // select-all never fires over the canvas.
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
+        selectAll()
+        event.preventDefault()
+        return
+      }
 
       switch (event.key) {
         case 'ArrowLeft':
@@ -53,5 +64,5 @@ export function useKeyboard() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nudge, removeSelected, select, cancelDrag])
+  }, [nudge, removeSelected, select, cancelDrag, selectAll])
 }

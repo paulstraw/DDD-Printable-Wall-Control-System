@@ -5,6 +5,7 @@ import type { GLTFLoader } from 'three-stdlib'
 import { placementOrigin } from '@ddd-planner/core'
 import { PARTS_BASE } from '../catalog/useCatalog'
 import type { CatalogPart } from '../store'
+import { modifierHeld } from '../useModifier'
 
 /**
  * Assets are meshopt-compressed. The decoder is bundled rather than fetched,
@@ -60,7 +61,7 @@ export function PartModel({
   col: number
   row: number
   selected: boolean
-  onSelect: () => void
+  onSelect: (additive: boolean) => void
 }) {
   const origin = placementOrigin(part.placement, part.h, { col, row })
 
@@ -69,7 +70,11 @@ export function PartModel({
       position={[origin.x, origin.y, origin.z]}
       onPointerDown={(e) => {
         e.stopPropagation()
-        onSelect()
+        // Shift and Cmd/Ctrl both add to the selection — the two conventions
+        // people arrive with, and neither is worth being pedantic about.
+        // Read from the same place the box-select and the camera read it,
+        // rather than off this event, so the three cannot disagree.
+        onSelect(modifierHeld())
       }}
     >
       <Suspense fallback={null}>

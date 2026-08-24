@@ -1,7 +1,8 @@
 import { OrbitControls } from '@react-three/drei'
 import type { Board } from '@ddd-planner/core'
 import { useStore } from '../store'
-import { DragGhost, DropTarget } from './DropTarget'
+import { useModifier } from '../useModifier'
+import { DragGhost, DropTarget, Marquee } from './DropTarget'
 import { Pegboard } from './Pegboard'
 import { PlacedParts } from './PlacedParts'
 import { useFaceOn } from './useFaceOn'
@@ -13,8 +14,15 @@ function CameraRig({ board }: { board: Board }) {
 
 export function Scene({ board }: { board: Board }) {
   const centre: [number, number, number] = [board.widthMm / 2, 0, board.heightMm / 2]
-  // A drag that crosses the canvas must not also swing the camera.
-  const dragging = useStore((s) => s.draggingPartId !== null)
+  // A drag that crosses the canvas must not also swing the camera — that
+  // goes for a box-select just as much as for a part coming out of the
+  // catalog. A plain wall drag *is* the camera, so it stays enabled.
+  //
+  // The camera stands down while a modifier is *held*, not once a
+  // box-select has started: OrbitControls claims the pointerdown before
+  // React can react to it. See useModifier.
+  const selecting = useModifier()
+  const busy = useStore((s) => s.draggingPartId !== null || s.marquee?.selecting === true)
 
   return (
     <>
@@ -27,11 +35,12 @@ export function Scene({ board }: { board: Board }) {
       <DropTarget board={board} />
       <PlacedParts />
       <DragGhost />
+      <Marquee />
 
       <OrbitControls
         makeDefault
         target={centre}
-        enabled={!dragging}
+        enabled={!busy && !selecting}
         enableDamping
         dampingFactor={0.12}
       />

@@ -16,10 +16,12 @@ export function App() {
   const setWallSize = useStore((s) => s.setWallSize)
   const placements = useStore((s) => s.placements)
   const catalog = useStore((s) => s.catalog)
-  const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
 
-  const selected = placements.find((p) => p.id === selectedId) ?? null
-  const selectedPart = partById(catalog, selected?.partId ?? null)
+  // One selected part gets named; several get counted. Naming the last one
+  // clicked would be worse than useless — it hides that others will move too.
+  const only = selectedIds.length === 1 ? placements.find((p) => p.id === selectedIds[0]) : null
+  const selectedPart = partById(catalog, only?.partId ?? null)
 
   return (
     <div className="app">
@@ -38,9 +40,15 @@ export function App() {
               ) : null}{' '}
               · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
             </>
+          ) : selectedIds.length > 1 ? (
+            <>
+              <strong>{selectedIds.length} selected</strong> · <kbd>←→↑↓</kbd> move together ·{' '}
+              <kbd>Del</kbd> remove
+            </>
           ) : (
             <>
-              drag a part onto the wall · <kbd>F</kbd> to face it
+              drag a part onto the wall · <kbd>⇧</kbd>click or <kbd>⇧</kbd>drag to
+              select · <kbd>F</kbd> to face it
             </>
           )}
         </span>
