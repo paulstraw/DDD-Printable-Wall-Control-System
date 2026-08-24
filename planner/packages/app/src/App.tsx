@@ -6,6 +6,7 @@ import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
 import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
+import { EmptyState } from './ui/EmptyState'
 import { IssuesPanel } from './ui/IssuesPanel'
 import { SaveAssembly } from './ui/SaveAssembly'
 import { WallActions } from './ui/WallActions'
@@ -86,6 +87,7 @@ export function App() {
           >
             <Scene board={board} />
           </Canvas>
+          <EmptyState />
         </div>
         <div className="right">
           <IssuesPanel />

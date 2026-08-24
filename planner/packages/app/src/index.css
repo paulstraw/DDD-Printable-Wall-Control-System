@@ -154,6 +154,7 @@ kbd {
 .viewport {
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
 canvas {
@@ -722,4 +723,55 @@ canvas {
 .tag.fits {
   background: #e2f0e6;
   color: #2f6b45;
+}
+
+/* ----------------------------------------------------------- empty state */
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  /* The board underneath must stay draggable — an empty wall is exactly
+     when someone drops their first part. Only the button takes clicks. */
+  pointer-events: none;
+}
+
+.empty-card {
+  max-width: 24rem;
+  padding: 1.1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.93);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(20, 25, 35, 0.09);
+  text-align: center;
+}
+
+.empty-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.empty-card p {
+  margin: 0 0 0.6rem;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.empty-aside {
+  color: var(--muted);
+}
+
+.empty-card .ghost-button {
+  pointer-events: auto;
+}
+
+.empty-keys {
+  margin: 0.7rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
 }

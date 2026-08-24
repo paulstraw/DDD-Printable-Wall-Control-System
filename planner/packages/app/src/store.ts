@@ -101,6 +101,9 @@ interface State {
   dragging: DragSubject | null
   hoverSlot: { col: number; row: number } | null
 
+  /** Add parts at given slots and select them. Used by a drop and by the example. */
+  addPlacements: (refs: readonly { partId: string; col: number; row: number }[]) => void
+
   beginPartDrag: (partId: string) => void
   beginAssemblyDrag: (assemblyId: string) => void
   setHoverSlot: (slot: { col: number; row: number } | null) => void
@@ -226,7 +229,7 @@ export const useStore = create<State>((set, get) => ({
 
   dropDrag: () => {
     const state = get()
-    const { dragging, hoverSlot, placements } = state
+    const { dragging, hoverSlot } = state
     // Releasing away from the wall is a cancelled drag, not a failed one.
     if (!dragging || !hoverSlot) {
       set({ dragging: null, hoverSlot: null })
@@ -243,13 +246,19 @@ export const useStore = create<State>((set, get) => ({
       return
     }
 
-    const added: Placement[] = landing.map((p) => ({ id: `p${nextId++}`, ...p }))
-    set({
-      placements: [...placements, ...added],
+    set({ dragging: null, hoverSlot: null })
+    get().addPlacements(landing)
+  },
+
+  addPlacements: (refs) => {
+    if (refs.length === 0) return
+    const added: Placement[] = refs.map((p) => ({ id: `p${nextId++}`, ...p }))
+    set((s) => ({
+      placements: [...s.placements, ...added],
+      // Newly placed parts arrive selected, so they can be nudged straight
+      // away and so the catalog ranks itself around them.
       selectedIds: added.map((p) => p.id),
-      dragging: null,
-      hoverSlot: null,
-    })
+    }))
   },
 
   deleteAssembly: (id) =>
