@@ -26,6 +26,7 @@ import {
 export interface CatalogPart {
   id: string
   family: string
+  role: 'sidepiece' | 'centerpiece'
   file: string
   name: string
   base: string
@@ -121,6 +122,15 @@ interface State {
   /** Replace the whole wall — a restored autosave, a link, an imported file. */
   hydrate: (state: PlannerState) => void
 
+  /**
+   * Issues the user has waved away. Kept for the session only — they are a
+   * reaction to what is on screen now, not a property of the wall, so they
+   * are deliberately not part of the saved document.
+   */
+  dismissedIssues: readonly string[]
+  dismissIssue: (id: string) => void
+  restoreIssues: () => void
+
   select: (id: string | null, mode?: SelectMode) => void
   selectAll: () => void
   beginMarquee: (point: Point2, selecting: boolean) => void
@@ -203,6 +213,7 @@ export const useStore = create<State>((set, get) => ({
   selectedIds: [],
   marquee: null,
   assemblies: [],
+  dismissedIssues: [],
 
   dragging: null,
   hoverSlot: null,
@@ -270,6 +281,15 @@ export const useStore = create<State>((set, get) => ({
     set({ assemblies: [...assemblies, assembly] })
     return unique
   },
+
+  dismissIssue: (id) =>
+    set((s) => ({
+      dismissedIssues: s.dismissedIssues.includes(id)
+        ? s.dismissedIssues
+        : [...s.dismissedIssues, id],
+    })),
+
+  restoreIssues: () => set({ dismissedIssues: [] }),
 
   select: (id, mode = 'replace') =>
     set((s) => ({ selectedIds: id === null ? [] : applySelection(s.selectedIds, id, mode) })),

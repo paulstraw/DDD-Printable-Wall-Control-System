@@ -1,0 +1,214 @@
+/**
+ * What is wrong with a wall — as warnings, never as refusals.
+ *
+ * The Decisions table settled this: placement is permissive, anything mates,
+ * and mismatches surface as dismissible warnings. So nothing here blocks
+ * anything. The job is to notice the four things a person building a hanger
+ * would want pointed out, and to say which parts are involved so they can be
+ * highlighted.
+ *
+ * Everything is derived from slot columns and wall-space heights, never from
+ * a part's family name. `role` comes from the family archetype, which is the
+ * only honest source: `Sidepieces/Retainers` is a centerpiece and a
+ * Quickhook is a sidepiece.
+ */
+
+import { type PlacementRule, occupiedColumns, placementOrigin } from './placement'
+
+export type IssueKind =
+  /** Two parts want the same slot. */
+  | 'overlap'
+  /** A centerpiece and the sidepiece beside it are different heights. */
+  | 'height-mismatch'
+  /** Nothing for a part to mount to. */
+  | 'unmounted'
+  /** A horizontal-panel part on a vertical wall. */
+  | 'unsupported'
+
+export interface Issue {
+  /**
+   * Stable across recomputes, so dismissing one makes it stay dismissed
+   * while the situation lasts. Built from the kind and the parts involved,
+   * which is exactly what "the same problem" means here.
+   */
+  readonly id: string
+  readonly kind: IssueKind
+  /** One line. Long enough to act on, short enough for a narrow panel. */
+  readonly message: string
+  /** The full explanation, for a tooltip. Only where there is more to say. */
+  readonly detail?: string
+  /** Placements to highlight; the first is the subject. */
+  readonly placementIds: readonly string[]
+}
+
+export interface IssuePart {
+  readonly name: string
+  readonly h: number | null
+  readonly role: 'sidepiece' | 'centerpiece'
+  readonly supported: boolean
+  readonly unsupportedReason?: string
+  readonly placement: PlacementRule
+  readonly sizeMm: { readonly z: number }
+}
+
+export interface IssuePlacement {
+  readonly id: string
+  readonly partId: string
+  readonly col: number
+  readonly row: number
+}
+
+/**
+ * Parts that merely touch are not overlapping. Real conflicts are whole
+ * slots deep, so half a millimetre is a comfortable floor and keeps float
+ * noise out of the panel.
+ */
+const TOUCH_TOLERANCE_MM = 0.5
+
+interface Span {
+  readonly placement: IssuePlacement
+  readonly part: IssuePart
+  readonly cols: readonly number[]
+  readonly minCol: number
+  readonly maxCol: number
+  readonly zMin: number
+  readonly zMax: number
+}
+
+function spanFor(placement: IssuePlacement, part: IssuePart): Span {
+  const cols = occupiedColumns(part.placement, placement)
+  const origin = placementOrigin(part.placement, part.h, placement)
+  return {
+    placement,
+    part,
+    cols,
+    minCol: Math.min(...cols),
+    maxCol: Math.max(...cols),
+    zMin: origin.z,
+    zMax: origin.z + part.sizeMm.z,
+  }
+}
+
+function sharesColumn(a: Span, b: Span): boolean {
+  return a.minCol <= b.maxCol && b.minCol <= a.maxCol
+}
+
+function overlapsVertically(a: Span, b: Span): boolean {
+  return (
+    a.zMax - b.zMin > TOUCH_TOLERANCE_MM && b.zMax - a.zMin > TOUCH_TOLERANCE_MM
+  )
+}
+
+/** Side by side with no gap: one ends where the other begins. */
+function adjacent(a: Span, b: Span): boolean {
+  return a.maxCol + 1 === b.minCol || b.maxCol + 1 === a.minCol
+}
+
+function issueId(kind: IssueKind, ids: readonly string[]): string {
+  return `${kind}:${[...ids].sort().join('+')}`
+}
+
+export function findIssues(
+  placements: readonly IssuePlacement[],
+  parts: ReadonlyMap<string, IssuePart>,
+): Issue[] {
+  const spans: Span[] = []
+  for (const placement of placements) {
+    const part = parts.get(placement.partId)
+    // A placement whose part left the catalog is the import warning's
+    // problem, not this panel's.
+    if (part) spans.push(spanFor(placement, part))
+  }
+
+  const issues: Issue[] = []
+
+  for (const span of spans) {
+    if (!span.part.supported) {
+      issues.push({
+        id: issueId('unsupported', [span.placement.id]),
+        kind: 'unsupported',
+        // The catalog's reason is a paragraph — right for a tooltip, wrong
+        // for a list where it would crowd out every other issue.
+        message: `${span.part.name} is made for a horizontal panel, so its position here means nothing`,
+        ...(span.part.unsupportedReason ? { detail: span.part.unsupportedReason } : {}),
+        placementIds: [span.placement.id],
+      })
+    }
+  }
+
+  for (let i = 0; i < spans.length; i++) {
+    for (let j = i + 1; j < spans.length; j++) {
+      const a = spans[i]!
+      const b = spans[j]!
+
+      if (sharesColumn(a, b) && overlapsVertically(a, b)) {
+        issues.push({
+          id: issueId('overlap', [a.placement.id, b.placement.id]),
+          kind: 'overlap',
+          message: `${a.part.name} and ${b.part.name} want the same space`,
+          placementIds: [a.placement.id, b.placement.id],
+        })
+        continue
+      }
+
+      // A mismatch only means anything where the two would actually mate:
+      // same slot row, touching, and one of each kind.
+      if (
+        a.placement.row === b.placement.row &&
+        adjacent(a, b) &&
+        a.part.role !== b.part.role &&
+        a.part.h !== null &&
+        b.part.h !== null &&
+        a.part.h !== b.part.h
+      ) {
+        const side = a.part.role === 'sidepiece' ? a : b
+        const centre = a.part.role === 'sidepiece' ? b : a
+        issues.push({
+          id: issueId('height-mismatch', [a.placement.id, b.placement.id]),
+          kind: 'height-mismatch',
+          message: `${centre.part.name} is ${centre.part.h} high but ${side.part.name} is ${side.part.h} — they will not line up`,
+          placementIds: [centre.placement.id, side.placement.id],
+        })
+      }
+    }
+  }
+
+  for (const span of spans) {
+    // A part with no grid height is not playing the sidepiece/centerpiece
+    // game at all — a Quickhook is a complete hanger on its own.
+    if (span.part.h === null) continue
+
+    const hasPartner = spans.some(
+      (other) =>
+        other !== span &&
+        other.placement.row === span.placement.row &&
+        other.part.role !== span.part.role &&
+        adjacent(span, other),
+    )
+    if (hasPartner) continue
+
+    issues.push({
+      id: issueId('unmounted', [span.placement.id]),
+      kind: 'unmounted',
+      message:
+        span.part.role === 'centerpiece'
+          ? `${span.part.name} has no sidepiece beside it to mount between`
+          : `${span.part.name} has nothing attached — it needs a centerpiece or a retainer`,
+      placementIds: [span.placement.id],
+    })
+  }
+
+  return issues
+}
+
+/** Group the counts for a one-line summary. */
+export function countByKind(issues: readonly Issue[]): Record<IssueKind, number> {
+  const counts: Record<IssueKind, number> = {
+    overlap: 0,
+    'height-mismatch': 0,
+    unmounted: 0,
+    unsupported: 0,
+  }
+  for (const issue of issues) counts[issue.kind] += 1
+  return counts
+}

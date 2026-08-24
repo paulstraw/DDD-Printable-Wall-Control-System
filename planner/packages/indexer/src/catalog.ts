@@ -36,6 +36,12 @@ function slug(familyId: string, filename: string): string {
 export interface PartRow {
   id: string
   family: string
+  /**
+   * Which side of the mounting grammar this part is, from its family's
+   * archetype rather than its folder — `Sidepieces/Retainers` is a
+   * centerpiece and a Quickhook is a sidepiece, so the path would lie.
+   */
+  role: 'sidepiece' | 'centerpiece'
   file: string
   name: string
   base: string
@@ -241,6 +247,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       parts.push({
         id,
         family: family.id as string,
+        role: (family.archetype as 'sidepiece' | 'centerpiece' | undefined) ?? 'centerpiece',
         file: `${dir}/${file}`,
         name: parsed.filename,
         base: parsed.base,

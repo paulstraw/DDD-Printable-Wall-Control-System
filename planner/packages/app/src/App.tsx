@@ -6,13 +6,14 @@ import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
 import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
+import { IssuesPanel } from './ui/IssuesPanel'
 import { SaveAssembly } from './ui/SaveAssembly'
 import { WallActions } from './ui/WallActions'
 import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
   useKeyboard()
-  const restoreNote = usePersistence()
+  const [restoreNote, dismissRestoreNote] = usePersistence()
 
   const board = useStore((s) => s.board)
   const widthIn = useStore((s) => s.widthIn)
@@ -37,7 +38,15 @@ export function App() {
         </span>
         <SaveAssembly />
         <WallActions />
-        {restoreNote ? <span className="wall-status warn-note">{restoreNote}</span> : null}
+        {restoreNote ? (
+          <button
+            className="wall-status warn-note as-text"
+            onClick={dismissRestoreNote}
+            title="Dismiss"
+          >
+            {restoreNote}
+          </button>
+        ) : null}
         <span className="hint">
           {selectedPart ? (
             <>
@@ -78,7 +87,10 @@ export function App() {
             <Scene board={board} />
           </Canvas>
         </div>
-        <BomPanel />
+        <div className="right">
+          <IssuesPanel />
+          <BomPanel />
+        </div>
       </div>
     </div>
   )

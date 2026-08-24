@@ -188,6 +188,25 @@ describe('the indexer, end to end', () => {
     }
   })
 
+  it('takes each part role from the archetype, not from its folder', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const roleOf = (name: string) =>
+      index.parts.find((p: { name: string }) => p.name === name)?.role
+
+    expect(roleOf('3x0 Flat Left')).toBe('sidepiece')
+    expect(roleOf('3x3 Spacer blank')).toBe('centerpiece')
+
+    // The two the folder name would get wrong. A retainer lives under
+    // Sidepieces but clips onto an assembly like a centerpiece, and a
+    // Quickhook lives on its own but hangs from the slots like a sidepiece.
+    expect(roleOf('2x0 Retainer')).toBe('centerpiece')
+    expect(roleOf('Quickhook 3in Heavy')).toBe('sidepiece')
+
+    for (const part of index.parts) {
+      expect(['sidepiece', 'centerpiece'], part.name).toContain(part.role)
+    }
+  })
+
   it('records the source STL size so a download can be estimated first', async () => {
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
     for (const part of index.parts) {

@@ -115,6 +115,15 @@ body,
   overflow-wrap: anywhere;
 }
 
+.as-text {
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
 .save-assembly {
   display: flex;
   align-items: center;
@@ -312,13 +321,20 @@ canvas {
 
 /* ------------------------------------------------------------------- bom */
 
-.bom {
+.right {
   width: 17.5rem;
   flex: none;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--bar);
   border-left: 1px solid var(--line);
+}
+
+.bom {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
@@ -588,6 +604,113 @@ canvas {
 }
 
 .assembly-delete:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* ---------------------------------------------------------------- issues */
+
+.issues {
+  flex: none;
+  max-height: 40%;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+  padding: 0.7rem 0.7rem 0.5rem;
+}
+
+.issues-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.issues-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.issues ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.issue {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.3rem 0.35rem;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.issue:hover {
+  border-color: var(--line);
+  background: #fff;
+}
+
+.issue-text {
+  overflow-wrap: anywhere;
+}
+
+.issue .tag {
+  flex: none;
+}
+
+.tag.overlap {
+  background: #fbe3e3;
+  color: #8c2f2f;
+}
+
+.tag.height-mismatch {
+  background: #fdf0dc;
+  color: #8a5a1b;
+}
+
+.tag.unmounted {
+  background: #e8eef7;
+  color: #37527a;
+}
+
+.tag.unsupported {
+  background: #efe6f7;
+  color: #5b3b82;
+}
+
+.issue-dismiss {
+  flex: none;
+  width: 1.4rem;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.issue-dismiss:hover {
   color: var(--ink);
   border-color: var(--line);
 }

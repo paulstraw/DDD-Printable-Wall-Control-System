@@ -19,7 +19,7 @@ import { useStore } from './store'
  * Restoring waits for the catalog so that parts a link names but this
  * library does not have can be reported rather than vanishing.
  */
-export function usePersistence(): string | null {
+export function usePersistence(): [note: string | null, dismiss: () => void] {
   const catalog = useStore((s) => s.catalog)
   const hydrate = useStore((s) => s.hydrate)
   const snapshot = useStore((s) => s.snapshot)
@@ -71,7 +71,9 @@ export function usePersistence(): string | null {
     saveLocal(encodeDocument(state))
   }, [placements, assemblies, widthIn, heightIn, snapshot])
 
-  return note
+  // The note describes what happened at load. It stays until waved away
+  // rather than guessing when it has stopped being interesting.
+  return [note, () => setNote(null)]
 }
 
 /** Whether there is anything worth putting in a link or a file. */
