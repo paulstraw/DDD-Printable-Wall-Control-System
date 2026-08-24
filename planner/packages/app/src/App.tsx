@@ -23,6 +23,7 @@ export function App() {
   const placements = useStore((s) => s.placements)
   const catalog = useStore((s) => s.catalog)
   const selectedIds = useStore((s) => s.selectedIds)
+  const dragging = useStore((s) => s.dragging)
 
   // One selected part gets named; several get counted. Naming the last one
   // clicked would be worse than useless — it hides that others will move too.
@@ -49,7 +50,11 @@ export function App() {
           </button>
         ) : null}
         <span className="hint">
-          {selectedPart ? (
+          {dragging ? (
+            <>
+              <strong>Tap the wall to place</strong> · tap the part again to cancel
+            </>
+          ) : selectedPart ? (
             <>
               <strong>{selectedPart.name}</strong>
               {selectedPart.supported === false ? (

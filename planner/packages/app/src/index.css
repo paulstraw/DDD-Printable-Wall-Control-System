@@ -775,3 +775,74 @@ canvas {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+.download-warning {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #8a5a1b;
+  background: #fdf0dc;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+}
+
+.download.warn {
+  background: #8a5a1b;
+}
+
+/* ---------------------------------------------------------------- narrow */
+
+/* Below this the three columns cannot coexist, so they stack: wall first,
+   then the catalog to pick from, then the print list. Panels get their own
+   scroll rather than the page growing, so the wall never scrolls away. */
+@media (max-width: 860px) {
+  .body {
+    flex-direction: column;
+  }
+
+  .viewport {
+    order: 1;
+    flex: none;
+    /* The wall keeps a fixed share; the catalog takes what is left. Both
+       have floors, so on a short screen they compress rather than one of
+       them vanishing. */
+    height: 38vh;
+    min-height: 13rem;
+  }
+
+  .catalog {
+    order: 2;
+    width: auto;
+    flex: 1;
+    min-height: 10rem;
+    border-right: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .right {
+    order: 3;
+    width: auto;
+    flex: none;
+    max-height: 32vh;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .issues {
+    max-height: 14vh;
+  }
+
+  .bar {
+    gap: 0.6rem 0.75rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .hint {
+    margin-left: 0;
+  }
+
+  .empty-card {
+    max-width: 20rem;
+    padding: 0.9rem 1rem;
+  }
+}

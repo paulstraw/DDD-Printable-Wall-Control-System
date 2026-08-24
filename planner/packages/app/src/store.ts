@@ -100,6 +100,15 @@ interface State {
    */
   dragging: DragSubject | null
   hoverSlot: { col: number; row: number } | null
+  /**
+   * Whether the pointer has moved since the drag began.
+   *
+   * A press that never moves is a *tap*, and on a touch screen that is the
+   * only way to pick a part without fighting the scrolling list. Tapping a
+   * card leaves it armed; tapping the wall then places it. A press that does
+   * move is an ordinary drag and drops on release.
+   */
+  dragMoved: boolean
 
   /** Add parts at given slots and select them. Used by a drop and by the example. */
   addPlacements: (refs: readonly { partId: string; col: number; row: number }[]) => void
@@ -220,19 +229,43 @@ export const useStore = create<State>((set, get) => ({
 
   dragging: null,
   hoverSlot: null,
+  dragMoved: false,
 
-  beginPartDrag: (partId) => set({ dragging: { kind: 'part', partId }, hoverSlot: null }),
+  beginPartDrag: (partId) =>
+    set((s) => ({
+      // Tapping the armed card again puts it down rather than re-arming it.
+      dragging:
+        s.dragging?.kind === 'part' && s.dragging.partId === partId
+          ? null
+          : { kind: 'part', partId },
+      hoverSlot: null,
+      dragMoved: false,
+    })),
   beginAssemblyDrag: (assemblyId) =>
-    set({ dragging: { kind: 'assembly', assemblyId }, hoverSlot: null }),
-  setHoverSlot: (hoverSlot) => set({ hoverSlot }),
-  cancelDrag: () => set({ dragging: null, hoverSlot: null }),
+    set((s) => ({
+      dragging:
+        s.dragging?.kind === 'assembly' && s.dragging.assemblyId === assemblyId
+          ? null
+          : { kind: 'assembly', assemblyId },
+      hoverSlot: null,
+      dragMoved: false,
+    })),
+  setHoverSlot: (hoverSlot) => set({ hoverSlot, dragMoved: true }),
+  cancelDrag: () => set({ dragging: null, hoverSlot: null, dragMoved: false }),
 
   dropDrag: () => {
     const state = get()
-    const { dragging, hoverSlot } = state
+    const { dragging, hoverSlot, dragMoved } = state
+    if (!dragging) return
+
+    // A press that never moved is a tap: stay armed and wait for a tap on
+    // the wall. This is what makes placing work on a touch screen, where
+    // dragging out of a scrolling list is a fight.
+    if (!dragMoved && !hoverSlot) return
+
     // Releasing away from the wall is a cancelled drag, not a failed one.
-    if (!dragging || !hoverSlot) {
-      set({ dragging: null, hoverSlot: null })
+    if (!hoverSlot) {
+      set({ dragging: null, hoverSlot: null, dragMoved: false })
       return
     }
 
@@ -241,12 +274,8 @@ export const useStore = create<State>((set, get) => ({
         ? [{ partId: dragging.partId, col: hoverSlot.col, row: hoverSlot.row }]
         : assemblyLanding(state, dragging.assemblyId, hoverSlot)
 
-    if (landing.length === 0) {
-      set({ dragging: null, hoverSlot: null })
-      return
-    }
-
-    set({ dragging: null, hoverSlot: null })
+    set({ dragging: null, hoverSlot: null, dragMoved: false })
+    if (landing.length === 0) return
     get().addPlacements(landing)
   },
 

@@ -31,7 +31,17 @@ export function AssemblyPanel() {
               <button
                 type="button"
                 className={isDragging ? 'assembly dragging' : 'assembly'}
-                onPointerDown={() => beginAssemblyDrag(assembly.id)}
+                onPointerDown={(e) => {
+                // Touch pointers are implicitly captured by the element that
+                // received the press, so every later `pointermove` would be
+                // delivered here instead of to the wall — the drag would
+                // never find a slot. Releasing the capture restores normal
+                // hit-testing and costs nothing with a mouse.
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                }
+                beginAssemblyDrag(assembly.id)
+              }}
                 title={`${assembly.name} — drag onto the wall`}
               >
                 <span className="assembly-name">{assembly.name}</span>

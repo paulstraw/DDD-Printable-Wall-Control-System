@@ -46,6 +46,8 @@ function Chips<T extends string | number | null>({
 export function CatalogPanel() {
   const { catalog, error } = useCatalog()
   const beginPartDrag = useStore((s) => s.beginPartDrag)
+  const cancelDrag = useStore((s) => s.cancelDrag)
+  const dragMoved = useStore((s) => s.dragMoved)
   const dragging = useStore((s) => s.dragging)
   const selectedIds = useStore((s) => s.selectedIds)
   const placements = useStore((s) => s.placements)
@@ -130,7 +132,17 @@ export function CatalogPanel() {
 
       {error ? <p className="catalog-error">{error}</p> : null}
 
-      <ul className="parts">
+      <ul
+        className="parts"
+        onScroll={() => {
+          // On a touch screen, pressing a card and swiping is how you scroll
+          // this list — and pressing a card is also how you arm one. A scroll
+          // is the unambiguous signal that the press was not a pick, so the
+          // armed part is put back down rather than waiting to be placed by
+          // the next tap on the wall.
+          if (dragging && !dragMoved) cancelDrag()
+        }}
+      >
         {results.map((part) => (
           <li key={part.id}>
             <button
@@ -140,7 +152,17 @@ export function CatalogPanel() {
                   ? 'part dragging'
                   : 'part'
               }
-              onPointerDown={() => beginPartDrag(part.id)}
+              onPointerDown={(e) => {
+                // Touch pointers are implicitly captured by the element that
+                // received the press, so every later `pointermove` would be
+                // delivered here instead of to the wall — the drag would
+                // never find a slot. Releasing the capture restores normal
+                // hit-testing and costs nothing with a mouse.
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId)
+                }
+                beginPartDrag(part.id)
+              }}
               title={
                 part.unsupportedReason
                   ? `${part.name} — ${part.unsupportedReason}`

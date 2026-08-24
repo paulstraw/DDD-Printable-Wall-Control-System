@@ -75,16 +75,18 @@ export function BomPanel() {
   }, [bom.files, catalog])
 
   const estimate = estimateDownload(downloadFiles)
+  const [confirmLarge, setConfirmLarge] = useState(false)
   const busy = status.phase === 'fetching' || status.phase === 'zipping'
 
   async function onDownload() {
-    if (estimate.isLarge) {
-      const proceed = window.confirm(
-        `This will fetch ${estimate.fileCount} files, about ${formatBytes(estimate.totalBytes)}, ` +
-          'and build the archive in memory. On a phone that may be slow. Continue?',
-      )
-      if (!proceed) return
+    // Asked inline rather than through `window.confirm`, which is a blocking
+    // system modal — jarring on a phone, and the one place this warning
+    // matters most is a phone.
+    if (estimate.isLarge && !confirmLarge) {
+      setConfirmLarge(true)
+      return
     }
+    setConfirmLarge(false)
     await download(downloadFiles)
   }
 
@@ -123,8 +125,19 @@ export function BomPanel() {
           </ul>
 
           <div className="bom-foot">
-            <button type="button" className="download" onClick={onDownload} disabled={busy}>
-              {downloadLabel(status, estimate)}
+            {confirmLarge ? (
+              <p className="download-warning">
+                That is {formatBytes(estimate.totalBytes)} across {estimate.fileCount} files, and
+                the archive is built in memory. On a phone it may be slow.
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className={confirmLarge ? 'download warn' : 'download'}
+              onClick={onDownload}
+              disabled={busy}
+            >
+              {confirmLarge ? 'Download anyway' : downloadLabel(status, estimate)}
             </button>
             <p className="bom-note">
               {estimate.totalBytes > 0 ? `${formatBytes(estimate.totalBytes)} of STLs, ` : ''}

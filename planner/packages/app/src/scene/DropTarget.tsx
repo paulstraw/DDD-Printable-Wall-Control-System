@@ -70,7 +70,16 @@ export function DropTarget({ board }: { board: Board }) {
       }}
       onPointerOut={() => dragging && setHoverSlot(null)}
       onPointerDown={(e) => {
-        if (dragging) return
+        if (dragging) {
+          // A touch screen has no hover, so the press itself is what picks
+          // the slot: tap a part, tap the wall, done.
+          const slot = nearestSlot(board, e.point.x, e.point.z)
+          if (slot) {
+            setHoverSlot({ col: slot.col, row: slot.row })
+            dropDrag()
+          }
+          return
+        }
         beginMarquee({ x: e.point.x, z: e.point.z }, selecting)
       }}
     >
