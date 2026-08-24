@@ -82,7 +82,7 @@ export interface PartRow {
 function placementFor(
   family: Record<string, unknown>,
   parsed: { h: number | null; w: number | null; variant: string | null },
-  placed: { widthMm: number; depthMm: number },
+  placed: { widthMm: number; depthMm: number; heightMm: number },
 ): PlacementRule {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rule = family as any
@@ -99,16 +99,55 @@ function placementFor(
       // How far it projects is its own business; the tang depth is shared.
       frontFaceYMm: -(placed.depthMm - rule.anchor.tang.depthMm),
       bottomBelowSlotCenterMm,
+      matesByHeight: true,
     }
   }
 
   const columns = Math.max(1, Math.round(parsed.w ?? 1))
+  const depth = rule.anchor.depth
   return {
     occupiesColumns: columns,
     offsetFromSlotXMm: (COLUMN_PITCH_MM * columns - placed.widthMm) / 2,
-    frontFaceYMm: rule.anchor.depth.frontFaceYMm,
-    bottomBelowSlotCenterMm,
+    // A family rotated out of the wall plane has no single depth to declare,
+    // because what used to be its height is now how far it projects. Those
+    // measure it; everything flat shares the mounting interface constant.
+    frontFaceYMm: depth.fromMeasuredDepth
+      ? -(placed.depthMm - (depth.standoffMm ?? 0))
+      : depth.frontFaceYMm,
+    bottomBelowSlotCenterMm: rule.anchor.topAlignsWithCenterpieceTop
+      ? hangingFromCenterpieceTop(rule, parsed.h, placed.heightMm)
+      : bottomBelowSlotCenterMm,
+    matesByHeight: rule.matesByHeight ?? true,
   }
+}
+
+/**
+ * Where a part hangs when only its top edge is anchored.
+ *
+ * A centerpiece lying in the wall plane is located by its bottom, because it
+ * fills the socket and its own height does the rest. One rotated out of that
+ * plane is not: a Gridfinity shelf is 10.8 mm thick whatever its `h` says, so
+ * anchoring the bottom would leave it floating below the socket. The socket
+ * pocket ends a measured 6.6 mm below the sidepiece's top, and that edge is
+ * where the top of a centerpiece of this height would land — so put the
+ * shelf's top there and work back down by its own thickness.
+ */
+function hangingFromCenterpieceTop(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rule: any,
+  heightUnits: number | null,
+  thicknessMm: number,
+): { odd: number; even: number } {
+  const units = Math.max(1, Math.round(heightUnits ?? 1))
+  const odd = units % 2 === 1
+  const drop = rule.anchor.bottomBelowSlotCenterMm
+  const bottom = odd ? drop.odd : drop.even
+  const nominal = rule.size.heightMm.perUnitMm * units + (rule.size.heightMm.constantMm ?? 0)
+  // Top of a flat centerpiece of this height, relative to the slot centre.
+  const top = nominal - bottom
+  // Both keys carry the same number: the part's own parity is already spent.
+  const value = Number((thicknessMm - top).toFixed(4))
+  return { odd: value, even: value }
 }
 
 interface UnsupportedRule {
@@ -244,6 +283,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const size = placed.bounds
       const widthMm = size.max.x - size.min.x
       const depthMm = size.max.y - size.min.y
+      const heightMm = size.max.z - size.min.z
       parts.push({
         id,
         family: family.id as string,
@@ -273,7 +313,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         ...(unsupportedReasonFor(unsupportedRules, parsed.filename) !== undefined
           ? { unsupportedReason: unsupportedReasonFor(unsupportedRules, parsed.filename) }
           : {}),
-        placement: placementFor(family, parsed, { widthMm, depthMm }),
+        placement: placementFor(family, parsed, { widthMm, depthMm, heightMm }),
       })
     }
   }

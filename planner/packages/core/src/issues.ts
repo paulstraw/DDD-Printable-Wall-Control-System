@@ -152,11 +152,15 @@ export function findIssues(
       }
 
       // A mismatch only means anything where the two would actually mate:
-      // same slot row, touching, and one of each kind.
+      // same slot row, touching, one of each kind, and both lining up by
+      // grid height in the first place. A Gridfinity shelf does not — see
+      // `matesByHeight`.
       if (
         a.placement.row === b.placement.row &&
         adjacent(a, b) &&
         a.part.role !== b.part.role &&
+        a.part.placement.matesByHeight &&
+        b.part.placement.matesByHeight &&
         a.part.h !== null &&
         b.part.h !== null &&
         a.part.h !== b.part.h

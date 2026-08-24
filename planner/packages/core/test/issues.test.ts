@@ -12,6 +12,7 @@ function part(over: Partial<IssuePart> & { name: string }): IssuePart {
       offsetFromSlotXMm: -12.6,
       frontFaceYMm: -10.2,
       bottomBelowSlotCenterMm: { odd: 14.55, even: 36.85 },
+      matesByHeight: true,
     },
     sizeMm: { z: 85.7 },
     ...over,
@@ -31,6 +32,7 @@ const catalog = new Map<string, IssuePart>([
         offsetFromSlotXMm: -2.7,
         frontFaceYMm: -10.2,
         bottomBelowSlotCenterMm: { odd: 11.45, even: 36.85 },
+        matesByHeight: true,
       },
       sizeMm: { z: 76 },
     }),
@@ -46,6 +48,7 @@ const catalog = new Map<string, IssuePart>([
         offsetFromSlotXMm: -2.7,
         frontFaceYMm: -10.2,
         bottomBelowSlotCenterMm: { odd: 11.45, even: 36.85 },
+        matesByHeight: true,
       },
       sizeMm: { z: 50.6 },
     }),
@@ -154,6 +157,35 @@ describe('height mismatch', () => {
   it('says nothing across different rows', () => {
     const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-2', 7, 6)], catalog)
     expect(issues.filter((i) => i.kind === 'height-mismatch')).toEqual([])
+  })
+
+  it('says nothing about a part that does not mate by height', () => {
+    // A Gridfinity frame is a shelf: rotated out of the wall it stands
+    // 10.8 mm tall whatever its name says, so h has nothing to compare.
+    const shelf = new Map(catalog)
+    shelf.set(
+      'gridfinity',
+      part({
+        name: '2x3 Gridfinity Frame 1x1',
+        h: 2,
+        role: 'centerpiece',
+        placement: {
+          occupiesColumns: 3,
+          offsetFromSlotXMm: -2.7,
+          frontFaceYMm: -50.6,
+          bottomBelowSlotCenterMm: { odd: 5.4, even: 5.4 },
+          matesByHeight: false,
+        },
+        sizeMm: { z: 10.8 },
+      }),
+    )
+    const issues = findIssues(
+      [at('p1', 'flat-left', 6, 4), at('p2', 'gridfinity', 7, 4), at('p3', 'flat-right', 10, 4)],
+      shelf,
+    )
+    expect(issues.filter((i) => i.kind === 'height-mismatch')).toEqual([])
+    // It still has to be mounted between something.
+    expect(issues.filter((i) => i.kind === 'unmounted')).toEqual([])
   })
 })
 

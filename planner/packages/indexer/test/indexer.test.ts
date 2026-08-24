@@ -233,16 +233,77 @@ describe('the indexer, end to end', () => {
     expect(by('3x3 Spacer blank').placement.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
     expect(by('3x3 Spacer clip-on').placement.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
 
-    // Centerpieces share the mounting-interface front face; sidepieces sit at
-    // their own depth, which is how a 67 mm bracket and an 18.7 mm flat both
-    // hang correctly off the same slot.
+    // Centerpieces that hang in the plane of the wall share the
+    // mounting-interface front face; sidepieces sit at their own depth, which
+    // is how a 67 mm bracket and an 18.7 mm flat both hang correctly off the
+    // same slot.
     const centerpieceFaces = new Set(
       index.parts
-        .filter((p: { family: string }) => p.family.startsWith('centerpieces/'))
+        .filter(
+          (p: { family: string }) =>
+            p.family.startsWith('centerpieces/') && p.family !== 'centerpieces/gridfinity',
+        )
         .map((p: { placement: { frontFaceYMm: number } }) => p.placement.frontFaceYMm),
     )
     expect(centerpieceFaces).toEqual(new Set([-10.2]))
     expect(by('3x0 Flat Left').placement.frontFaceYMm).toBeCloseTo(-10.2, 1)
+
+    // A Gridfinity frame is the exception: rotated a quarter turn out of the
+    // wall, it is a shelf, so it projects by what the filename calls its
+    // height instead of sharing the interface constant.
+    // Measured, not derived, so the 0.1 mm of model noise the families test
+    // already tolerates shows up here too.
+    expect(by('5x7 Gridfinity Frame 3x4').placement.frontFaceYMm).toBeCloseTo(-126.8, 1)
+    expect(
+      Math.abs(by('2x10 Gridfinity Frame 1x6').placement.frontFaceYMm + 50.6),
+    ).toBeLessThanOrEqual(0.15)
+  })
+
+  it('lays a Gridfinity frame out of the wall, cells up, and nothing else', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const by = (name: string) =>
+      index.parts.find((p: { name: string }) => p.name === name) as {
+        sizeMm: { x: number; y: number; z: number }
+        placement: { matesByHeight: boolean; bottomBelowSlotCenterMm: { odd: number; even: number } }
+      }
+
+    // Rotated: the 3x4 grid's four columns run along the wall, its three rows
+    // run out of it, and the 10.8 mm plate thickness is all the height it has.
+    const frame = by('5x7 Gridfinity Frame 3x4')
+    expect(frame.sizeMm.x).toBeCloseTo(183.2, 1)
+    expect(frame.sizeMm.y).toBeCloseTo(126.8, 1)
+    expect(frame.sizeMm.z).toBeCloseTo(10.8, 1)
+
+    // Located by its top, not its bottom: the top lands 6.6 mm below the top
+    // of a sidepiece of the same h, on the edge of the socket pocket, which
+    // is where a flat centerpiece of that height would top out too.
+    const SIDEPIECE_TOP_ABOVE_SLOT: Record<number, number> = {
+      1: 20.35, 2: 20.35, 3: 71.15, 4: 71.15, 5: 121.95, 6: 121.95, 7: 172.75, 8: 172.75,
+    }
+    for (const name of [
+      '2x10 Gridfinity Frame 1x6',
+      '4x4 Gridfinity Frame 2x2',
+      '5x7 Gridfinity Frame 3x4',
+      '7x14 Gridfinity Frame 4x8',
+    ]) {
+      const part = index.parts.find((p: { name: string }) => p.name === name)
+      const drop = part.placement.bottomBelowSlotCenterMm[part.h % 2 === 1 ? 'odd' : 'even']
+      const top = -drop + part.sizeMm.z
+      expect((SIDEPIECE_TOP_ABOVE_SLOT[part.h] as number) - top, name).toBeCloseTo(6.6, 1)
+    }
+
+    expect(frame.placement.matesByHeight).toBe(false)
+
+    // A Spacer blank of the same height still hangs flat, tall side up.
+    const blank = by('4x7 Spacer blank')
+    expect(blank.sizeMm.z).toBeCloseTo(101.4, 1)
+    expect(blank.placement.matesByHeight).toBe(true)
+
+    // Nothing else in the library is rotated out of the wall plane.
+    const rotated = index.parts
+      .filter((p: { placement: { matesByHeight: boolean } }) => !p.placement.matesByHeight)
+      .map((p: { family: string }) => p.family)
+    expect(new Set(rotated)).toEqual(new Set(['centerpieces/gridfinity']))
   })
 
   it('gives a centerpiece the columns it spans and a sidepiece one', async () => {

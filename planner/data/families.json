@@ -313,7 +313,23 @@
       },
       "sizeNote": "The trailing 1x6 in a name is the Gridfinity grid, not a wall dimension. The five 14-column frames measure 360.0 rather than 361.0, hence the loosened tolerance.",
       "tabs": { "present": true, "overhangPerSideMm": 2.7 },
-      "fasteners": []
+      "fasteners": [],
+
+      "printToWall": { "x": "-x", "y": "-y", "z": "+z" },
+      "printToWallNote": "The one family that does not take the centerpiece archetype's map, and the only one rotated a quarter turn out of the wall. Gridfinity is a horizontal system: a frame mounts as a shelf with its cells facing up, so bins stand in it the way they stand on a bench. The archetype map would lay it flat against the panel with the cells facing the room, which is what this planner drew until it was corrected. Sizes still read height x width off the filename; under this map that height becomes how far the shelf projects, which is why depth is measured rather than declared.",
+
+      "matesByHeight": false,
+      "matesByHeightNote": "A shelf does not have to match the height of the sidepiece beside it, because its wall-space height is its 10.8 mm thickness rather than 25.4h - 0.2. Comparing h to a neighbour's h would warn about the wrong thing in both directions.",
+
+      "anchor": {
+        "topAlignsWithCenterpieceTop": true,
+        "topAlignsWithCenterpieceTopNote": "Located by its top edge, not its bottom. A centerpiece lying in the wall plane fills the socket, so anchoring its bottom and letting 25.4h - 0.2 do the rest is enough. A shelf is 10.8 mm thick whatever its h says, so the same anchor would drop it clear of the socket entirely. Measured on 2x2 L Bracket Flat Left: the socket pocket runs to 50.60 of a 57.20 mm bracket, ending the 6.6 mm below the top that sockets.centerpieceTopBelowSidepieceTopMm already records - which is exactly where a flat centerpiece of the same h tops out. The shelf tops out there too, and the archetype odd/even numbers below are what that top is derived from.",
+        "depth": {
+          "fromMeasuredDepth": true,
+          "standoffMm": 0,
+          "note": "Back edge flush with the panel face, projecting forward by the part's own depth. Depth is the filename's height dimension once rotated - 50.6, 101.4, 126.8 or 177.6 mm - so it comes from the mesh rather than the archetype's single constant."
+        }
+      }
     },
     {
       "id": "centerpieces/honeycomb_storage_wall",

@@ -22,6 +22,16 @@ export interface PlacementRule {
   readonly frontFaceYMm: number
   /** Drop from the engaged slot's centre to the part's bottom edge. */
   readonly bottomBelowSlotCenterMm: { readonly odd: number; readonly even: number }
+  /**
+   * Whether this part lines up with its neighbour by grid height.
+   *
+   * True for everything that hangs in the plane of the wall, where `h` is
+   * both the name and the wall-space height. False for a part rotated out of
+   * that plane — a Gridfinity frame is a shelf, so its `h` says how far it
+   * projects and comparing it to a sidepiece's `h` would warn about the
+   * wrong thing.
+   */
+  readonly matesByHeight: boolean
 }
 
 export interface SlotRef {

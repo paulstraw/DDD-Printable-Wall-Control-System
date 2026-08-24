@@ -13,6 +13,7 @@ const FLAT_LEFT: PlacementRule = {
   offsetFromSlotXMm: 1.1 - 13.7,
   frontFaceYMm: -10.2,
   bottomBelowSlotCenterMm: { odd: 14.55, even: 36.85 },
+  matesByHeight: true,
 }
 
 /** A 3x3 Spacer blank: 25.4*3 + 5.4 wide, centred on its three columns. */
@@ -21,6 +22,7 @@ const BLANK_3: PlacementRule = {
   offsetFromSlotXMm: -2.7,
   frontFaceYMm: -10.2,
   bottomBelowSlotCenterMm: { odd: 11.45, even: 36.85 },
+  matesByHeight: true,
 }
 
 describe('placementOrigin', () => {
