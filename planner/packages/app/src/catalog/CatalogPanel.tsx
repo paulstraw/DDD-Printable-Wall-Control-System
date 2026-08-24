@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { collectFacets, searchParts } from '@ddd-planner/core'
-import { useStore } from '../store'
+import { type RankContext, collectFacets, compatibilityScore, searchParts } from '@ddd-planner/core'
+import { partById, useStore } from '../store'
 import { AssemblyPanel } from '../ui/AssemblyPanel'
 import { PARTS_BASE, useCatalog } from './useCatalog'
 
@@ -47,6 +47,8 @@ export function CatalogPanel() {
   const { catalog, error } = useCatalog()
   const beginPartDrag = useStore((s) => s.beginPartDrag)
   const dragging = useStore((s) => s.dragging)
+  const selectedIds = useStore((s) => s.selectedIds)
+  const placements = useStore((s) => s.placements)
 
   const [query, setQuery] = useState('')
   const [families, setFamilies] = useState<string[]>([])
@@ -55,9 +57,29 @@ export function CatalogPanel() {
 
   const parts = catalog?.parts ?? []
   const facets = useMemo(() => collectFacets(parts), [parts])
+
+  // The most recently selected part is what someone is working on — a drop
+  // selects what it placed, so this is usually "the thing I just added".
+  // Taking the whole selection would need a rule for what a mixed one means,
+  // and there is no useful answer.
+  const context = useMemo<RankContext | null>(() => {
+    const last = selectedIds[selectedIds.length - 1]
+    if (!last) return null
+    const placement = placements.find((p) => p.id === last)
+    const part = partById(catalog, placement?.partId ?? null)
+    if (!part) return null
+    return { role: part.role, h: part.h, family: part.family, variant: part.variant }
+  }, [catalog, placements, selectedIds])
+
+  const contextName = useMemo(() => {
+    const last = selectedIds[selectedIds.length - 1]
+    const placement = placements.find((p) => p.id === last)
+    return partById(catalog, placement?.partId ?? null)?.name ?? null
+  }, [catalog, placements, selectedIds])
+
   const results = useMemo(
-    () => searchParts(parts, query, { families, variants, heights }),
-    [parts, query, families, variants, heights],
+    () => searchParts(parts, query, { families, variants, heights }, context),
+    [parts, query, families, variants, heights, context],
   )
 
   function toggle<T>(list: T[], set: (next: T[]) => void, value: T) {
@@ -98,6 +120,11 @@ export function CatalogPanel() {
         />
         <p className="result-count">
           {error ? 'unavailable' : `${results.length} of ${parts.length} parts`}
+          {contextName && !error ? (
+            // Say why the order changed. A list that silently reshuffles
+            // itself when you click something is unsettling.
+            <span className="ranked-for"> · sorted for {contextName}</span>
+          ) : null}
         </p>
       </div>
 
@@ -122,6 +149,11 @@ export function CatalogPanel() {
             >
               <img src={`${PARTS_BASE}${part.thumb}`} alt="" width={44} height={44} draggable={false} />
               <span className="part-name">{part.name}</span>
+              {context && compatibilityScore(part, context) >= 4 ? (
+                <span className="tag fits" title={`Goes with ${contextName}`}>
+                  fits
+                </span>
+              ) : null}
               {part.supported === false ? (
                 <span className="tag warn" title={part.unsupportedReason}>
                   horizontal

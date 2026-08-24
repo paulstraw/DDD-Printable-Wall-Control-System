@@ -714,3 +714,12 @@ canvas {
   color: var(--ink);
   border-color: var(--line);
 }
+
+.ranked-for {
+  color: var(--muted);
+}
+
+.tag.fits {
+  background: #e2f0e6;
+  color: #2f6b45;
+}

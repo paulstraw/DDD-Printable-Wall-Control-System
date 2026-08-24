@@ -21,6 +21,13 @@ export interface Searchable {
   readonly w: number | null
 }
 
+/** A row that can also be ranked against what is selected. */
+export interface Rankable extends Searchable {
+  readonly role: 'sidepiece' | 'centerpiece'
+  /** False for horizontal-panel parts, which cannot mate on this wall. */
+  readonly supported: boolean
+}
+
 export interface Facets {
   readonly families: readonly string[]
   readonly variants: readonly (string | null)[]
@@ -114,13 +121,74 @@ export function collectFacets<T extends Searchable>(parts: readonly T[]): Facets
  * Filter by facets, then rank what is left by the query. With no query the
  * catalog stays in its natural order rather than being shuffled by score.
  */
-export function searchParts<T extends Searchable>(
+/* ---------------------------------------------------------------- ranking */
+
+/** What the user is working on: the part they most recently selected. */
+export interface RankContext {
+  readonly role: 'sidepiece' | 'centerpiece'
+  readonly h: number | null
+  readonly family: string
+  readonly variant: string | null
+}
+
+/**
+ * How well a part goes with what is selected. Zero means no opinion.
+ *
+ * Ranking, never filtering — the Decisions table says compatible parts sort
+ * up and *nothing is hidden*. Someone building something the library did not
+ * anticipate must still be able to find every part.
+ *
+ * Two relationships are worth knowing about, and they are the two moves
+ * anyone makes while building a hanger:
+ *
+ *   - the part that **mates**: the opposite role at the same height, which
+ *     is a centerpiece for the sidepiece you just placed;
+ *   - the part that **mirrors** it: the same family and height in the other
+ *     variant, which is the Right to go with the Left.
+ */
+export function compatibilityScore(part: Rankable, context: RankContext): number {
+  // A horizontal-panel part cannot mate with anything here, so recommending
+  // one is worse than useless. No opinion, not a penalty — it keeps its place
+  // in the catalog and stays findable, which is what "nothing hidden" means.
+  if (!part.supported) return 0
+
+  const sameHeight = part.h !== null && context.h !== null && part.h === context.h
+  const opposite = part.role !== context.role
+
+  let score = 0
+  if (opposite && sameHeight) score += 4
+  else if (opposite) score += 1
+
+  if (
+    !opposite &&
+    sameHeight &&
+    part.family === context.family &&
+    part.variant !== context.variant
+  ) {
+    score += 3
+  }
+
+  if (sameHeight) score += 1
+  return score
+}
+
+export function searchParts<T extends Rankable>(
   parts: readonly T[],
   query: string,
   filter: FacetFilter = {},
+  context: RankContext | null = null,
 ): T[] {
   const eligible = parts.filter((part) => matchesFacets(part, filter))
-  if (query.trim() === '') return eligible
+
+  // With no query, compatibility is the only ordering signal there is, so it
+  // does the sorting outright. `sort` is stable, so parts with nothing to
+  // recommend them keep the catalog's own order.
+  if (query.trim() === '') {
+    if (!context) return eligible
+    return [...eligible].sort(
+      (a, b) => compatibilityScore(b, context) - compatibilityScore(a, context),
+    )
+  }
 
   const scored: { part: T; score: number }[] = []
   for (const part of eligible) {
@@ -133,6 +201,15 @@ export function searchParts<T extends Searchable>(
     if (best !== Number.NEGATIVE_INFINITY) scored.push({ part, score: best })
   }
 
-  scored.sort((a, b) => b.score - a.score || a.part.name.localeCompare(b.part.name))
+  // A typed query wins outright — someone who typed `flat right` wants that,
+  // whatever is selected. Compatibility only breaks ties, which is where it
+  // is genuinely useful: it puts the matching height first among eight
+  // identically-named sizes.
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (context ? compatibilityScore(b.part, context) - compatibilityScore(a.part, context) : 0) ||
+      a.part.name.localeCompare(b.part.name),
+  )
   return scored.map((s) => s.part)
 }
