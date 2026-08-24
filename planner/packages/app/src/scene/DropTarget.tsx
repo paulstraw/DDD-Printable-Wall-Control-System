@@ -1,6 +1,16 @@
 import { useEffect } from 'react'
-import { type Board, nearestSlot, placementOrigin, rectFromCorners } from '@ddd-planner/core'
-import { partById, useStore } from '../store'
+import {
+  type Assembly,
+  type Board,
+  absoluteParts,
+  clampGroupDelta,
+  nearestSlot,
+  placementOrigin,
+  rectFromCorners,
+  slotColumnCount,
+  slotRowCount,
+} from '@ddd-planner/core'
+import { type CatalogFile, partById, useStore } from '../store'
 import { useModifier } from '../useModifier'
 
 /**
@@ -15,7 +25,7 @@ import { useModifier } from '../useModifier'
  * never moves clears the selection.
  */
 export function DropTarget({ board }: { board: Board }) {
-  const dragging = useStore((s) => s.draggingPartId)
+  const dragging = useStore((s) => s.dragging)
   const setHoverSlot = useStore((s) => s.setHoverSlot)
   const dropDrag = useStore((s) => s.dropDrag)
   const marquee = useStore((s) => s.marquee)
@@ -98,22 +108,68 @@ export function Marquee() {
   )
 }
 
-/** A translucent box showing where the dragged part would land. */
+/**
+ * Translucent boxes showing where the drag would land.
+ *
+ * An assembly gets one box per part rather than a single bounding box: what
+ * a user needs to see before releasing is which slots fill up, and an
+ * outline around the whole group hides the gaps inside it.
+ */
 export function DragGhost() {
   const catalog = useStore((s) => s.catalog)
-  const dragging = useStore((s) => s.draggingPartId)
+  const dragging = useStore((s) => s.dragging)
   const hoverSlot = useStore((s) => s.hoverSlot)
+  const assemblies = useStore((s) => s.assemblies)
+  const board = useStore((s) => s.board)
 
-  const part = partById(catalog, dragging)
-  if (!part || !hoverSlot) return null
+  if (!dragging || !hoverSlot) return null
 
-  const origin = placementOrigin(part.placement, part.h, hoverSlot)
-  const { x, y, z } = part.sizeMm
+  const landing =
+    dragging.kind === 'part'
+      ? [{ partId: dragging.partId, ...hoverSlot }]
+      : ghostLanding(assemblies, catalog, board, dragging.assemblyId, hoverSlot)
 
   return (
-    <mesh position={[origin.x + x / 2, origin.y + y / 2, origin.z + z / 2]}>
-      <boxGeometry args={[x, y, z]} />
-      <meshStandardMaterial color="#f0a35e" transparent opacity={0.45} depthWrite={false} />
-    </mesh>
+    <group>
+      {landing.map((slot, i) => {
+        const part = partById(catalog, slot.partId)
+        if (!part) return null
+        const origin = placementOrigin(part.placement, part.h, slot)
+        const { x, y, z } = part.sizeMm
+        return (
+          <mesh key={i} position={[origin.x + x / 2, origin.y + y / 2, origin.z + z / 2]}>
+            <boxGeometry args={[x, y, z]} />
+            <meshStandardMaterial color="#f0a35e" transparent opacity={0.45} depthWrite={false} />
+          </mesh>
+        )
+      })}
+    </group>
   )
+}
+
+/**
+ * The ghost has to apply the same edge correction the drop will, or the
+ * preview would promise a position the drop then quietly moves.
+ */
+function ghostLanding(
+  assemblies: readonly Assembly[],
+  catalog: CatalogFile | null,
+  board: Board,
+  assemblyId: string,
+  anchor: { col: number; row: number },
+) {
+  const assembly = assemblies.find((a) => a.id === assemblyId)
+  if (!assembly) return []
+
+  const landed = absoluteParts(assembly, anchor)
+  const move = clampGroupDelta(
+    landed.map((p) => ({
+      col: p.col,
+      row: p.row,
+      spanCols: partById(catalog, p.partId)?.placement.occupiesColumns ?? 1,
+    })),
+    { dCol: 0, dRow: 0 },
+    { cols: slotColumnCount(board), rows: slotRowCount(board) },
+  )
+  return landed.map((p) => ({ ...p, col: p.col + move.dCol, row: p.row + move.dRow }))
 }

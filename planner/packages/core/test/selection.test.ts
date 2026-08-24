@@ -110,6 +110,28 @@ describe('clampGroupDelta', () => {
     expect(clampGroupDelta(items, { dCol: 1, dRow: 0 }, limits).dCol).toBe(0)
   })
 
+  it('pulls a group that already hangs off the board back onto it', () => {
+    // This is how dropping an assembly near an edge is corrected: ask for a
+    // move of zero, and the allowed range — entirely negative for a group
+    // hanging off the right — returns exactly the shift needed.
+    const hangingOff = [
+      { col: 8, row: 0 },
+      { col: 12, row: 0 },
+    ]
+    expect(clampGroupDelta(hangingOff, { dCol: 0, dRow: 0 }, limits).dCol).toBe(-3)
+
+    const above = [{ col: 0, row: 11 }]
+    expect(clampGroupDelta(above, { dCol: 0, dRow: 0 }, limits).dRow).toBe(-4)
+  })
+
+  it('leaves a group that already fits exactly where it is', () => {
+    const inside = [
+      { col: 0, row: 0 },
+      { col: 9, row: 7 },
+    ]
+    expect(clampGroupDelta(inside, { dCol: 0, dRow: 0 }, limits)).toEqual({ dCol: 0, dRow: 0 })
+  })
+
   it('is a no-op on an empty selection', () => {
     expect(clampGroupDelta([], { dCol: 3, dRow: 3 }, limits)).toEqual({ dCol: 0, dRow: 0 })
   })

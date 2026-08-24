@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { collectFacets, searchParts } from '@ddd-planner/core'
 import { useStore } from '../store'
+import { AssemblyPanel } from '../ui/AssemblyPanel'
 import { PARTS_BASE, useCatalog } from './useCatalog'
 
 /** Family ids are paths; the last segment is what a person recognises. */
@@ -44,8 +45,8 @@ function Chips<T extends string | number | null>({
 
 export function CatalogPanel() {
   const { catalog, error } = useCatalog()
-  const beginDrag = useStore((s) => s.beginDrag)
-  const dragging = useStore((s) => s.draggingPartId)
+  const beginPartDrag = useStore((s) => s.beginPartDrag)
+  const dragging = useStore((s) => s.dragging)
 
   const [query, setQuery] = useState('')
   const [families, setFamilies] = useState<string[]>([])
@@ -65,6 +66,8 @@ export function CatalogPanel() {
 
   return (
     <aside className="catalog">
+      <AssemblyPanel />
+
       <div className="catalog-head">
         <input
           type="search"
@@ -105,8 +108,12 @@ export function CatalogPanel() {
           <li key={part.id}>
             <button
               type="button"
-              className={dragging === part.id ? 'part dragging' : 'part'}
-              onPointerDown={() => beginDrag(part.id)}
+              className={
+                dragging?.kind === 'part' && dragging.partId === part.id
+                  ? 'part dragging'
+                  : 'part'
+              }
+              onPointerDown={() => beginPartDrag(part.id)}
               title={
                 part.unsupportedReason
                   ? `${part.name} — ${part.unsupportedReason}`

@@ -5,6 +5,7 @@ import {
   type Point2,
   type PlacementRule,
   type SelectMode,
+  absoluteParts,
   applySelection,
   clampGroupDelta,
   createAssembly,
@@ -88,11 +89,18 @@ interface State {
    */
   marquee: { from: Point2; to: Point2; selecting: boolean } | null
 
-  /** The part currently being dragged out of the catalog, if any. */
-  draggingPartId: string | null
+  /**
+   * What is being dragged onto the wall, if anything.
+   *
+   * A part and a whole assembly take the same route — hover, snap, drop —
+   * so they share one drag rather than two parallel ones that would have to
+   * be kept in step in every handler.
+   */
+  dragging: DragSubject | null
   hoverSlot: { col: number; row: number } | null
 
-  beginDrag: (partId: string) => void
+  beginPartDrag: (partId: string) => void
+  beginAssemblyDrag: (assemblyId: string) => void
   setHoverSlot: (slot: { col: number; row: number } | null) => void
   dropDrag: () => void
   cancelDrag: () => void
@@ -105,6 +113,7 @@ interface State {
    * to save or nothing to call it.
    */
   saveSelectionAsAssembly: (rawName: string) => string | null
+  deleteAssembly: (id: string) => void
 
   select: (id: string | null, mode?: SelectMode) => void
   selectAll: () => void
@@ -114,6 +123,41 @@ interface State {
   nudge: (dCol: number, dRow: number) => void
   removeSelected: () => void
   clear: () => void
+}
+
+export type DragSubject =
+  | { kind: 'part'; partId: string }
+  | { kind: 'assembly'; assemblyId: string }
+
+/**
+ * Where an assembly's parts land when dropped on `anchor`, pulled back onto
+ * the board if the drop would hang it off an edge.
+ *
+ * The correction is `clampGroupDelta` asked for a move of *zero*: the
+ * allowed range for a group already hanging off the right edge is entirely
+ * negative, so clamping zero into it returns exactly the shift needed to
+ * bring the group back. One rule, used for both nudging and dropping.
+ */
+function assemblyLanding(
+  state: Pick<State, 'assemblies' | 'catalog' | 'board'>,
+  assemblyId: string,
+  anchor: { col: number; row: number },
+): { partId: string; col: number; row: number }[] {
+  const assembly = state.assemblies.find((a) => a.id === assemblyId)
+  if (!assembly) return []
+
+  const landed = absoluteParts(assembly, anchor)
+  const move = clampGroupDelta(
+    landed.map((p) => ({
+      col: p.col,
+      row: p.row,
+      spanCols: partById(state.catalog, p.partId)?.placement.occupiesColumns ?? 1,
+    })),
+    { dCol: 0, dRow: 0 },
+    { cols: slotColumnCount(state.board), rows: slotRowCount(state.board) },
+  )
+
+  return landed.map((p) => ({ ...p, col: p.col + move.dCol, row: p.row + move.dRow }))
 }
 
 /** The wall-face rectangle each placement covers, for marquee hit-testing. */
@@ -154,33 +198,50 @@ export const useStore = create<State>((set, get) => ({
   marquee: null,
   assemblies: [],
 
-  draggingPartId: null,
+  dragging: null,
   hoverSlot: null,
 
-  beginDrag: (partId) => set({ draggingPartId: partId, hoverSlot: null }),
+  beginPartDrag: (partId) => set({ dragging: { kind: 'part', partId }, hoverSlot: null }),
+  beginAssemblyDrag: (assemblyId) =>
+    set({ dragging: { kind: 'assembly', assemblyId }, hoverSlot: null }),
   setHoverSlot: (hoverSlot) => set({ hoverSlot }),
-  cancelDrag: () => set({ draggingPartId: null, hoverSlot: null }),
+  cancelDrag: () => set({ dragging: null, hoverSlot: null }),
 
   dropDrag: () => {
-    const { draggingPartId, hoverSlot, placements } = get()
+    const state = get()
+    const { dragging, hoverSlot, placements } = state
     // Releasing away from the wall is a cancelled drag, not a failed one.
-    if (!draggingPartId || !hoverSlot) {
-      set({ draggingPartId: null, hoverSlot: null })
+    if (!dragging || !hoverSlot) {
+      set({ dragging: null, hoverSlot: null })
       return
     }
-    const placement: Placement = {
-      id: `p${nextId++}`,
-      partId: draggingPartId,
-      col: hoverSlot.col,
-      row: hoverSlot.row,
+
+    const landing =
+      dragging.kind === 'part'
+        ? [{ partId: dragging.partId, col: hoverSlot.col, row: hoverSlot.row }]
+        : assemblyLanding(state, dragging.assemblyId, hoverSlot)
+
+    if (landing.length === 0) {
+      set({ dragging: null, hoverSlot: null })
+      return
     }
+
+    const added: Placement[] = landing.map((p) => ({ id: `p${nextId++}`, ...p }))
     set({
-      placements: [...placements, placement],
-      selectedIds: [placement.id],
-      draggingPartId: null,
+      placements: [...placements, ...added],
+      selectedIds: added.map((p) => p.id),
+      dragging: null,
       hoverSlot: null,
     })
   },
+
+  deleteAssembly: (id) =>
+    set((s) => ({
+      assemblies: s.assemblies.filter((a) => a.id !== id),
+      // Deleting the definition must not disturb anything already on the
+      // wall — placed parts stopped being part of it the moment they landed.
+      dragging: s.dragging?.kind === 'assembly' && s.dragging.assemblyId === id ? null : s.dragging,
+    })),
 
   saveSelectionAsAssembly: (rawName) => {
     const { selectedIds, placements, assemblies } = get()

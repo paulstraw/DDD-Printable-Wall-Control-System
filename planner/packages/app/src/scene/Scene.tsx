@@ -22,7 +22,7 @@ export function Scene({ board }: { board: Board }) {
   // box-select has started: OrbitControls claims the pointerdown before
   // React can react to it. See useModifier.
   const selecting = useModifier()
-  const busy = useStore((s) => s.draggingPartId !== null || s.marquee?.selecting === true)
+  const busy = useStore((s) => s.dragging !== null || s.marquee?.selecting === true)
 
   return (
     <>
