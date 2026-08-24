@@ -5,6 +5,7 @@ import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
 import { useKeyboard } from './useKeyboard'
+import { SaveAssembly } from './ui/SaveAssembly'
 import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
         <span className="count">
           {slotColumnCount(board)} × {slotRowCount(board)} slots · {placements.length} placed
         </span>
+        <SaveAssembly />
         <span className="hint">
           {selectedPart ? (
             <>

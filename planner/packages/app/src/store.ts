@@ -1,20 +1,24 @@
 import { create } from 'zustand'
 import {
+  type Assembly,
   type Board,
   type Point2,
   type PlacementRule,
   type SelectMode,
   applySelection,
   clampGroupDelta,
+  createAssembly,
   createBoard,
   footprintRect,
   idsInRect,
   mergeSelection,
+  normaliseAssemblyName,
   placementOrigin,
   rectArea,
   rectFromCorners,
   slotColumnCount,
   slotRowCount,
+  uniqueAssemblyName,
 } from '@ddd-planner/core'
 
 export interface CatalogPart {
@@ -93,6 +97,15 @@ interface State {
   dropDrag: () => void
   cancelDrag: () => void
 
+  /** Groups the user has saved, newest last. */
+  assemblies: Assembly[]
+  /**
+   * Save what is selected under a name. Returns the name it was actually
+   * stored under — which may be numbered — or `null` if there was nothing
+   * to save or nothing to call it.
+   */
+  saveSelectionAsAssembly: (rawName: string) => string | null
+
   select: (id: string | null, mode?: SelectMode) => void
   selectAll: () => void
   beginMarquee: (point: Point2, selecting: boolean) => void
@@ -122,6 +135,7 @@ function footprints(state: Pick<State, 'placements' | 'catalog'>) {
 const MARQUEE_MIN_AREA_MM2 = 16
 
 let nextId = 1
+let nextAssemblyId = 1
 
 export const useStore = create<State>((set, get) => ({
   board: createBoard(32, 32),
@@ -138,6 +152,7 @@ export const useStore = create<State>((set, get) => ({
   placements: [],
   selectedIds: [],
   marquee: null,
+  assemblies: [],
 
   draggingPartId: null,
   hoverSlot: null,
@@ -165,6 +180,28 @@ export const useStore = create<State>((set, get) => ({
       draggingPartId: null,
       hoverSlot: null,
     })
+  },
+
+  saveSelectionAsAssembly: (rawName) => {
+    const { selectedIds, placements, assemblies } = get()
+    const name = normaliseAssemblyName(rawName)
+    if (!name || selectedIds.length === 0) return null
+
+    // Save in wall order, not click order: an assembly the user built
+    // left-to-right should read that way when it is listed.
+    const chosen = new Set(selectedIds)
+    const members = placements
+      .filter((p) => chosen.has(p.id))
+      .slice()
+      .sort((a, b) => a.col - b.col || a.row - b.row)
+
+    const unique = uniqueAssemblyName(
+      assemblies.map((a) => a.name),
+      name,
+    )
+    const assembly = createAssembly(`a${nextAssemblyId++}`, unique, members)
+    set({ assemblies: [...assemblies, assembly] })
+    return unique
   },
 
   select: (id, mode = 'replace') =>

@@ -82,6 +82,43 @@ body,
   margin-left: auto;
 }
 
+.ghost-button {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.ghost-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.save-assembly {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.save-assembly input {
+  width: 12rem;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+}
+
 kbd {
   font: inherit;
   font-size: 0.72rem;
