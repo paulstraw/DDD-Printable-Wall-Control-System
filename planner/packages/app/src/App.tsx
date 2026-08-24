@@ -5,11 +5,14 @@ import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
 import { useKeyboard } from './useKeyboard'
+import { usePersistence } from './usePersistence'
 import { SaveAssembly } from './ui/SaveAssembly'
+import { WallActions } from './ui/WallActions'
 import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
   useKeyboard()
+  const restoreNote = usePersistence()
 
   const board = useStore((s) => s.board)
   const widthIn = useStore((s) => s.widthIn)
@@ -33,6 +36,8 @@ export function App() {
           {slotColumnCount(board)} × {slotRowCount(board)} slots · {placements.length} placed
         </span>
         <SaveAssembly />
+        <WallActions />
+        {restoreNote ? <span className="wall-status warn-note">{restoreNote}</span> : null}
         <span className="hint">
           {selectedPart ? (
             <>

@@ -102,6 +102,19 @@ body,
   cursor: default;
 }
 
+.wall-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wall-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+}
+
 .save-assembly {
   display: flex;
   align-items: center;

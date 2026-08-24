@@ -12,6 +12,7 @@ import {
   createBoard,
   footprintRect,
   idsInRect,
+  type PlannerState,
   mergeSelection,
   normaliseAssemblyName,
   placementOrigin,
@@ -114,6 +115,11 @@ interface State {
    */
   saveSelectionAsAssembly: (rawName: string) => string | null
   deleteAssembly: (id: string) => void
+
+  /** Everything worth saving, sharing or exporting. */
+  snapshot: () => PlannerState
+  /** Replace the whole wall — a restored autosave, a link, an imported file. */
+  hydrate: (state: PlannerState) => void
 
   select: (id: string | null, mode?: SelectMode) => void
   selectAll: () => void
@@ -337,6 +343,33 @@ export const useStore = create<State>((set, get) => ({
     const doomed = new Set(selectedIds)
     set({ placements: placements.filter((p) => !doomed.has(p.id)), selectedIds: [] })
   },
+
+  snapshot: () => {
+    const { widthIn, heightIn, placements, assemblies } = get()
+    return {
+      widthIn,
+      heightIn,
+      // Placement ids are this session's own bookkeeping; a saved wall is
+      // just parts at slots.
+      placements: placements.map((p) => ({ partId: p.partId, col: p.col, row: p.row })),
+      assemblies,
+    }
+  },
+
+  hydrate: (state) =>
+    set({
+      widthIn: state.widthIn,
+      heightIn: state.heightIn,
+      board: createBoard(state.widthIn, state.heightIn),
+      placements: state.placements.map((p) => ({ id: `p${nextId++}`, ...p })),
+      // Ids from the document are positional; re-issue them from this
+      // session's counter so a later save cannot collide with them.
+      assemblies: state.assemblies.map((a) => ({ ...a, id: `a${nextAssemblyId++}` })),
+      selectedIds: [],
+      marquee: null,
+      dragging: null,
+      hoverSlot: null,
+    }),
 
   clear: () => set({ placements: [], selectedIds: [], marquee: null }),
 }))
