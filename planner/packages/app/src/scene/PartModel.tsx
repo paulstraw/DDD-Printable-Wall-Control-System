@@ -2,7 +2,7 @@ import { Suspense, useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { MeshoptDecoder } from 'meshoptimizer'
 import type { GLTFLoader } from 'three-stdlib'
-import { type Orientation, placementOrigin } from '@ddd-planner/core'
+import { type Orientation, type OrientedPlacement, placementOrigin } from '@ddd-planner/core'
 import { PARTS_BASE } from '../catalog/useCatalog'
 import { type CatalogPart, orientedFor } from '../store'
 import { modifierHeld } from '../useModifier'
@@ -50,6 +50,32 @@ function Model({ part, selected }: { part: CatalogPart; selected: boolean }) {
   return <primitive object={object} />
 }
 
+/**
+ * How to hang the asset off the origin `placementOrigin` gives.
+ *
+ * Assets ship rotated for their default orientation with the minimum corner
+ * at the origin, so turning one moves it off that corner and it has to be put
+ * back. A -90° turn about wall X maps the asset's box [0,W]x[0,D]x[0,H] onto
+ * [0,W]x[0,H]x[-D,0]: what hangs below the floor is D, the plate's own
+ * thickness, and in a turned record that is `sizeMm.z` — `sizeMm.y` has
+ * already become the reach. Lifting by the reach instead put a shelf a whole
+ * grid unit above its pocket.
+ *
+ * Three.js applies rotation before position, so the two compose in this order
+ * without further arithmetic. Exported because the invariant worth checking
+ * is that this lands the asset on exactly the box the drag ghost drew, and a
+ * test cannot check that against a number buried in a component.
+ */
+export function assetTransform(oriented: OrientedPlacement): {
+  rotationX: number
+  lift: number
+} {
+  return {
+    rotationX: (oriented.rotateXDeg * Math.PI) / 180,
+    lift: oriented.rotateXDeg === 0 ? 0 : oriented.sizeMm.z,
+  }
+}
+
 export function PartModel({
   part,
   col,
@@ -67,14 +93,7 @@ export function PartModel({
 }) {
   const oriented = orientedFor(part, orientation)
   const origin = placementOrigin(oriented.rule, part.h, { col, row })
-
-  // Assets ship rotated for their default orientation with the minimum corner
-  // at the origin, so turning one moves it off that corner and it has to be
-  // put back. A -90° turn about X sends the part's depth below the floor,
-  // hence the lift by exactly that depth. Three.js applies rotation before
-  // position, so the two compose in this order without further arithmetic.
-  const rad = (oriented.rotateXDeg * Math.PI) / 180
-  const lift = oriented.rotateXDeg === 0 ? 0 : oriented.sizeMm.y
+  const { rotationX, lift } = assetTransform(oriented)
 
   return (
     <group
@@ -89,7 +108,7 @@ export function PartModel({
       }}
     >
       <Suspense fallback={null}>
-        <group rotation={[rad, 0, 0]} position={[0, 0, lift]}>
+        <group rotation={[rotationX, 0, 0]} position={[0, 0, lift]}>
           <Model part={part} selected={selected} />
         </group>
       </Suspense>

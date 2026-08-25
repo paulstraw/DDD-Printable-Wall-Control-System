@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { OrientedPlacement } from '@ddd-planner/core'
+import { Box3, Matrix4, Vector3 } from 'three'
+import { type OrientedPlacement, placementOrigin } from '@ddd-planner/core'
 import {
   type CatalogFile,
   type CatalogPart,
@@ -7,6 +8,7 @@ import {
   orientedFor,
   useStore,
 } from '../src/store'
+import { assetTransform } from '../src/scene/PartModel'
 
 const RULE = {
   occupiesColumns: 3,
@@ -129,5 +131,57 @@ describe('setOrientation', () => {
     useStore.setState({ selectedIds: [] })
     useStore.getState().setOrientation('shelf')
     expect(useStore.getState().placements).toBe(before)
+  })
+})
+
+describe('assetTransform', () => {
+  /**
+   * Where the asset actually ends up, composed the way the scene graph
+   * composes it: the outer group carries the placement origin, the inner one
+   * the turn and the lift, and three.js applies rotation before position.
+   *
+   * The asset itself always ships flat with its minimum corner on the origin,
+   * so its untransformed box is the oriented size with y and z swapped back
+   * for anything turned.
+   */
+  const drawnBox = (oriented: OrientedPlacement, origin: { x: number; y: number; z: number }) => {
+    const { rotationX, lift } = assetTransform(oriented)
+    const s = oriented.sizeMm
+    const asShipped =
+      oriented.rotateXDeg === 0
+        ? new Vector3(s.x, s.y, s.z)
+        : new Vector3(s.x, s.z, s.y)
+
+    const matrix = new Matrix4()
+      .makeTranslation(origin.x, origin.y, origin.z)
+      .multiply(new Matrix4().makeTranslation(0, 0, lift))
+      .multiply(new Matrix4().makeRotationX(rotationX))
+
+    return new Box3(new Vector3(0, 0, 0), asShipped).applyMatrix4(matrix)
+  }
+
+  const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 6)
+
+  const sits = (oriented: OrientedPlacement) => {
+    const origin = placementOrigin(oriented.rule, 3, { col: 2, row: 1 })
+    const box = drawnBox(oriented, origin)
+    near(box.min.x, origin.x)
+    near(box.min.y, origin.y)
+    near(box.min.z, origin.z)
+    near(box.max.x, origin.x + oriented.sizeMm.x)
+    near(box.max.y, origin.y + oriented.sizeMm.y)
+    near(box.max.z, origin.z + oriented.sizeMm.z)
+  }
+
+  // Both orientations have to land on exactly the box `placementOrigin` and
+  // `sizeMm` promise — which is the box the drag ghost draws. The two used to
+  // disagree for a shelf: the lift was the reach rather than the thickness,
+  // so the plate hung 19 mm above the pocket that holds it.
+  it('lands a flat part on the box the ghost drew', () => sits(flat))
+  it('lands a shelf on the box the ghost drew', () => sits(shelf))
+
+  it('lifts a turned part by its thickness, not its reach', () => {
+    expect(assetTransform(shelf).lift).toBe(shelf.sizeMm.z)
+    expect(assetTransform(flat).lift).toBe(0)
   })
 })
