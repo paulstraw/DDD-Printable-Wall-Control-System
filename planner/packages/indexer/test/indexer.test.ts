@@ -250,12 +250,15 @@ describe('the indexer, end to end', () => {
 
     // A Gridfinity frame is the exception: rotated a quarter turn out of the
     // wall, it is a shelf, so it projects by what the filename calls its
-    // height instead of sharing the interface constant.
+    // height instead of sharing the interface constant. It also cannot start
+    // at the panel — the first arm pocket is 24.05 out from the tang and the
+    // frame's first rib is 7.75 in from its back edge, so the back edge
+    // stands 7.8 mm proud and the front face is that much further out again.
     // Measured, not derived, so the 0.1 mm of model noise the families test
     // already tolerates shows up here too.
-    expect(by('5x7 Gridfinity Frame 3x4').placement.frontFaceYMm).toBeCloseTo(-126.8, 1)
+    expect(by('5x7 Gridfinity Frame 3x4').placement.frontFaceYMm).toBeCloseTo(-126.8 - 7.8, 1)
     expect(
-      Math.abs(by('2x10 Gridfinity Frame 1x6').placement.frontFaceYMm + 50.6),
+      Math.abs(by('2x10 Gridfinity Frame 1x6').placement.frontFaceYMm + 50.6 + 7.8),
     ).toBeLessThanOrEqual(0.15)
   })
 
@@ -274,12 +277,13 @@ describe('the indexer, end to end', () => {
     expect(frame.sizeMm.y).toBeCloseTo(126.8, 1)
     expect(frame.sizeMm.z).toBeCloseTo(10.8, 1)
 
-    // Located by its top, not its bottom: the top lands 6.6 mm below the top
-    // of a sidepiece of the same h, on the edge of the socket pocket, which
-    // is where a flat centerpiece of that height would top out too.
-    const SIDEPIECE_TOP_ABOVE_SLOT: Record<number, number> = {
-      1: 20.35, 2: 20.35, 3: 71.15, 4: 71.15, 5: 121.95, 6: 121.95, 7: 172.75, 8: 172.75,
-    }
+    // Located by its rib, not by its top and not by its bottom. The rib sits
+    // in the arm pocket, whose floor is 12.9 below the top of the sidepiece,
+    // and a sidepiece's top is always 20.35 above the slot it tops out on —
+    // so the frame's own face lands 7.45 *above* that slot centre, and `h`
+    // never enters into it. Every frame gets the same number, which is the
+    // whole point: for a shelf `h` is depth, and a 4-deep frame does not
+    // belong a slot row higher than a 2-deep one.
     for (const name of [
       '2x10 Gridfinity Frame 1x6',
       '4x4 Gridfinity Frame 2x2',
@@ -287,9 +291,10 @@ describe('the indexer, end to end', () => {
       '7x14 Gridfinity Frame 4x8',
     ]) {
       const part = index.parts.find((p: { name: string }) => p.name === name)
-      const drop = part.placement.bottomBelowSlotCenterMm[part.h % 2 === 1 ? 'odd' : 'even']
-      const top = -drop + part.sizeMm.z
-      expect((SIDEPIECE_TOP_ABOVE_SLOT[part.h] as number) - top, name).toBeCloseTo(6.6, 1)
+      const { odd, even } = part.placement.bottomBelowSlotCenterMm
+      expect(odd, name).toBeCloseTo(-7.45, 2)
+      // Parity is already spent — a shelf has no height for it to key off.
+      expect(even, name).toBe(odd)
     }
 
     expect(frame.placement.matesByHeight).toBe(false)

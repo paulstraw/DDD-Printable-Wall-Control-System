@@ -29,6 +29,47 @@
     "depthDatum": "Front-flush at the mounting interface. A sidepiece's front face is -(its own depth - tang.depthMm), so a bracket that projects 67 mm sits further out than a flat that projects 18.7 mm. A centerpiece uses the interface depth itself, which is what lands its tab in the socket."
   },
 
+  "armSocket": {
+    "$comment": [
+      "A sidepiece carries two sockets, not one, and they take the same",
+      "centerpiece in two different orientations.",
+      "",
+      "The back plate's socket runs vertically and holds a centerpiece flat",
+      "against the panel. The arm's socket runs horizontally, out along the",
+      "projection, and holds the same centerpiece as a shelf. Every",
+      "shelf-capable centerpiece already has the feature that fits it: a band",
+      "repeating every 25.4 mm along the edge, one per grid unit. Ribbed",
+      "families fill the pocket with the rib itself; pinned families cut a",
+      "matching notch and a 4x10x8 mm pin bridges the two recesses, 4 mm into",
+      "each. That is what the pin's odd dimensions are for.",
+      "",
+      "This lives here rather than under either archetype because it is the",
+      "interface between them, and the merge in assembly.ts is one level deep,",
+      "so a centerpiece family cannot see the sidepiece archetype's blocks.",
+      "",
+      "Measured across all 228 sidepieces. 156 have an arm socket; the 72 that",
+      "do not are the Flats (no arm to put one on), the Retainers (a",
+      "centerpiece filed under Sidepieces) and the Strap mounts."
+    ],
+    "pocketLengthMm": 10.0,
+    "pocketHeightMm": 4.0,
+    "pitchMm": 25.4,
+    "toleranceMm": 0.05,
+    "toleranceNote": "Every one of the 156 measures 10.00 long on a 25.40 pitch to within 0.05, which is the resolution of the scan rather than a spread in the models.",
+
+    "pocketFloorBelowSidepieceTopMm": 12.9,
+    "pocketFloorNote": "The floor of the topmost pocket, as a drop from the top of the sidepiece. True of 99 of the 156 - every standard bracket. The rest are the Inverted variants, which put their arm at the bottom (54.85), and the Midmount ones, which put it in the middle (29.45 / 31.10). The planner cannot use those: it never knows which sidepiece holds a given centerpiece, so it has one number to draw with and this is the one that is right for a standard bracket.",
+
+    "firstPocketOutFromTangMm": 24.05,
+    "firstPocketNote": "Where pocket 1 begins, measured along the depth axis from the tang end. True of 123 of the 156; the others start a lattice step further out. A shelf's own first band sits bandFirstOffsetMm in from its back edge, so the two together are what set how far the back edge stands off the panel - and why a shelf cannot be drawn flush against it.",
+
+    "sidepieceTopAboveTopSlotCenterMm": 20.35,
+    "sidepieceTopNote": "A sidepiece's top is always this far above the centre of its topmost engaged slot: h=1 gives 34.9 - 14.55, h=2 gives 57.2 - 36.85, h=3 gives 85.7 - 14.55 - 50.8. Same number every time, which is what lets a shelf be located without knowing the height of whatever holds it.",
+
+    "pocketsPerBracket": "w",
+    "pocketsPerBracketNote": "A bracket has exactly one pocket per inch of projection, so a shelf h units deep needs a sidepiece beside it that reaches at least that far. Nothing enforces it here; issues.ts warns."
+  },
+
   "unsupported": [
     {
       "match": "horizontal wall control",
@@ -322,12 +363,12 @@
       "matesByHeightNote": "A shelf does not have to match the height of the sidepiece beside it, because its wall-space height is its 10.8 mm thickness rather than 25.4h - 0.2. Comparing h to a neighbour's h would warn about the wrong thing in both directions.",
 
       "anchor": {
-        "topAlignsWithCenterpieceTop": true,
-        "topAlignsWithCenterpieceTopNote": "Located by its top edge, not its bottom. A centerpiece lying in the wall plane fills the socket, so anchoring its bottom and letting 25.4h - 0.2 do the rest is enough. A shelf is 10.8 mm thick whatever its h says, so the same anchor would drop it clear of the socket entirely. Measured on 2x2 L Bracket Flat Left: the socket pocket runs to 50.60 of a 57.20 mm bracket, ending the 6.6 mm below the top that sockets.centerpieceTopBelowSidepieceTopMm already records - which is exactly where a flat centerpiece of the same h tops out. The shelf tops out there too, and the archetype odd/even numbers below are what that top is derived from.",
+        "seatsInArmSocket": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.75 },
+        "seatsInArmSocketNote": "Located by its rib, not by its top and not by its bottom. A centerpiece lying in the wall plane is located by its bottom because it fills the socket and 25.4h - 0.2 does the rest; a shelf is 10.8 mm thick whatever its h says, so that anchor drops it clear of the socket. What actually holds it is the rib, in the arm pocket, so that is what the planner lines up: bandFloorMm is where the rib starts within the part's own thickness (0.00 here - the rib is flush with the face it sits on) and bandFirstOffsetMm is how far the first band is in from the back edge. Both measured; both re-derived by the indexer test. Everything else follows from armSocket above.",
+        "seatsInArmSocketCorrection": "This replaces a rule that anchored the frame's top 6.6 mm below the sidepiece top and stood its back edge flush with the panel. Both were wrong, and by the same mistake: 6.6 is the edge of the *back plate's* vertical socket, checked against a tab at 39.8..43.6 in the height axis. A shelf's rib is horizontal and cannot enter a 3.8 mm-deep vertical slot - it belongs in the arm pocket, whose floor is 12.9 below the top and whose first pocket starts 24.05 out from the tang. Seating it properly moves the frame 4.5 mm up and 7.8 mm out.",
         "depth": {
           "fromMeasuredDepth": true,
-          "standoffMm": 0,
-          "note": "Back edge flush with the panel face, projecting forward by the part's own depth. Depth is the filename's height dimension once rotated - 50.6, 101.4, 126.8 or 177.6 mm - so it comes from the mesh rather than the archetype's single constant."
+          "note": "Depth is the filename's height dimension once rotated - 50.6, 101.4, 126.8 or 177.6 mm - so it comes from the mesh rather than the archetype's single constant. Where the back edge lands is not free: the first pocket is 24.05 out from the tang and the first band is 7.75 in from the edge, so the back edge stands 7.8 mm proud of the panel and nothing can push it flush."
         }
       }
     },

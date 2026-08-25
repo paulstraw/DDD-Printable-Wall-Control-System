@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { type AxisMap, parsePartName, slotSpanHeightMm } from '@ddd-planner/core'
-import { readStlFile } from '../src/stl'
+import { type AxisMap, SLOT_ROW_PITCH_MM, parsePartName, slotSpanHeightMm } from '@ddd-planner/core'
+import { type Vec3, readStlFile } from '../src/stl'
 import { REPO_ROOT, assessJoint, buildPhase1Joint, resolvedFamilies } from '../src/assembly'
 
 const PLANNER_ROOT = join(import.meta.dirname, '..', '..', '..')
@@ -308,6 +308,172 @@ describe('sidepieces share one mounting interface', () => {
         if (parsed.variant !== 'left' && parsed.variant !== 'right') continue
         expect(sizeOf(family.dir, name).z, `${family.id} ${name}`).toBeCloseTo(13.7, 1)
       }
+    }
+  })
+})
+
+/**
+ * Ray-cast occupancy along one print axis, at a fixed point on the other two.
+ *
+ * Enough to section a mesh without a geometry library: count how many
+ * triangles a ray crosses beyond a point, and an odd count means inside. Used
+ * here to re-derive the arm socket rather than take families.json's word for
+ * it.
+ */
+function solidAt(tris: Float32Array, x: number, y: number, z: number): boolean {
+  let crossings = 0
+  for (let i = 0; i < tris.length; i += 9) {
+    const ax = tris[i]!, ay = tris[i + 1]!, az = tris[i + 2]!
+    const bx = tris[i + 3]!, by = tris[i + 4]!, bz = tris[i + 5]!
+    const cx = tris[i + 6]!, cy = tris[i + 7]!, cz = tris[i + 8]!
+    const d = (by - ay) * (cx - ax) - (bx - ax) * (cy - ay)
+    if (Math.abs(d) < 1e-12) continue
+    const u = ((y - ay) * (cx - ax) - (x - ax) * (cy - ay)) / d
+    const v = ((x - ax) * (by - ay) - (y - ay) * (bx - ax)) / d
+    if (u < 0 || v < 0 || u + v > 1) continue
+    if (az + u * (bz - az) + v * (cz - az) > z) crossings++
+  }
+  return crossings % 2 === 1
+}
+
+/** Recentred triangles, so every measurement is relative to the bbox min. */
+function recentred(dir: string, file: string): { tris: Float32Array; size: Vec3 } {
+  const mesh = readStlFile(join(REPO_ROOT, dir, file))
+  const { min, size } = mesh.bbox
+  const tris = new Float32Array(mesh.positions.length)
+  for (let i = 0; i < mesh.positions.length; i += 3) {
+    tris[i] = mesh.positions[i]! - min.x
+    tris[i + 1] = mesh.positions[i + 1]! - min.y
+    tris[i + 2] = mesh.positions[i + 2]! - min.z
+  }
+  return { tris, size }
+}
+
+/** Solid/empty runs along one axis, sampled at 0.05 mm. */
+function runs(at: (t: number) => boolean, to: number): [number, number, boolean][] {
+  const out: [number, number, boolean][] = []
+  let cur = at(0)
+  let start = 0
+  for (let t = 0.05; t <= to; t += 0.05) {
+    const s = at(t)
+    if (s !== cur) {
+      if (t - start > 0.4) out.push([start, t, cur])
+      cur = s
+      start = t
+    }
+  }
+  if (to - start > 0.4) out.push([start, to, cur])
+  return out
+}
+
+describe('the arm socket, re-derived from the meshes', () => {
+  const SOCKET = DATA.armSocket
+  // Everything below is sampled at 0.05 mm, so a reading is allowed to be a
+  // step out either way. Tighter than that would be asserting the sampler,
+  // not the models.
+  const STEP = 0.05
+  const near = (actual: number, expected: number, what: string) =>
+    expect(Math.abs(actual - expected), `${what}: ${actual} vs ${expected}`).toBeLessThanOrEqual(
+      2 * STEP,
+    )
+
+  // Standard top-arm brackets across three families and both hands. Inverted
+  // and Midmount variants are deliberately excluded: they carry the same
+  // socket at a different height, which is the one thing the planner cannot
+  // model, and families.json says so.
+  const BRACKETS: [string, string][] = [
+    ['Sidepieces/L_brackets', '2x4 L Bracket Flat Left.stl'],
+    ['Sidepieces/L_brackets', '2x2 L Bracket Flat Left.stl'],
+    ['Sidepieces/L_brackets', '2x4 L Bracket Flat Right.stl'],
+    ['Sidepieces/Angle_brackets', '2x3 Angle Bracket Flat Left.stl'],
+    ['Sidepieces/Angle_brackets', '3x2 Angle Bracket Flat Left.stl'],
+    ['Sidepieces/Square_brackets', '2x2.25 Square Bracket Flat Left.stl'],
+  ]
+
+  it.each(BRACKETS)('%s / %s has its topmost pocket where the rule says', (dir, file) => {
+    const { tris, size } = recentred(dir, file)
+    // The socket recess sits just in from the tang face. A Right sidepiece
+    // mirrors in print-x, so pockets are measured from whichever end clears
+    // the lattice by more — that end carries the tang.
+    const z = 3.0
+    let band: [number, number] | null = null
+    let pockets: [number, number, boolean][] = []
+    for (let y = size.y - 1; y > 0 && !band; y -= 0.5) {
+      const along = runs((t) => solidAt(tris, t, y, z), size.x)
+      const found = along.filter(
+        ([a, b, s], i) =>
+          !s && b - a > 8 && b - a < 12 && along[i - 1]?.[2] === true && along[i + 1]?.[2] === true,
+      )
+      if (found.length === 0) continue
+      pockets = found
+      const centre = (found[0]![0] + found[0]![1]) / 2
+      const up = runs((t) => solidAt(tris, centre, t, z), size.y)
+      const slots = up.filter(
+        ([a, b, s], i) =>
+          !s && b - a > 2 && b - a < 8 && up[i - 1]?.[2] === true && up[i + 1]?.[2] === true,
+      )
+      if (slots.length > 0) band = [slots[slots.length - 1]![0], slots[slots.length - 1]![1]]
+    }
+
+    expect(band, 'no arm pocket found').not.toBeNull()
+    const [floor, ceil] = band!
+    near(ceil - floor, SOCKET.pocketHeightMm, 'pocket height')
+    near(size.y - floor, SOCKET.pocketFloorBelowSidepieceTopMm, 'floor below top')
+
+    for (const [a, b] of pockets) near(b - a, SOCKET.pocketLengthMm, 'pocket length')
+    for (let i = 1; i < pockets.length; i++)
+      near(pockets[i]![0] - pockets[i - 1]![0], SOCKET.pitchMm, 'pitch')
+
+    // Depth runs whichever way leaves the bigger clearance before pocket 1.
+    const first = pockets[0]![0]
+    const last = size.x - pockets[pockets.length - 1]![1]
+    near(Math.max(first, last), SOCKET.firstPocketOutFromTangMm, 'first pocket out from tang')
+  })
+
+  it("puts a sidepiece's top a fixed 20.35 above its topmost engaged slot", () => {
+    // Two independent derivations, which is the point: the odd/even drops and
+    // the slot-span height series have to agree, or a shelf cannot be placed
+    // without knowing what holds it.
+    const sidepiece = DATA.archetypes.sidepiece
+    const drop = sidepiece.anchor.bottomBelowSlotCenterMm
+    const lip = sidepiece.size.heightMm
+    for (const h of [1, 2, 3, 4, 5, 6]) {
+      const odd = h % 2 === 1
+      const engaged = Math.ceil(h / 2)
+      // The Flats series: 34.90, 57.20, 85.70, 108.00, 136.50 — a slot span
+      // plus the lip that alternates with parity.
+      const height = slotSpanHeightMm(engaged) + (odd ? lip.lipOddMm : lip.lipEvenMm)
+      const topAboveAnchorSlot = height - (odd ? drop.odd : drop.even)
+      const topAboveTopSlot = topAboveAnchorSlot - (engaged - 1) * SLOT_ROW_PITCH_MM
+      expect(topAboveTopSlot, `h=${h}`).toBeCloseTo(SOCKET.sidepieceTopAboveTopSlotCenterMm, 2)
+    }
+  })
+
+  it('finds the same rib lattice on every family declared to seat in it', () => {
+    const seating = (DATA.families as Record<string, any>[]).filter(
+      (f) => f.anchor?.seatsInArmSocket !== undefined,
+    )
+    expect(seating.length).toBeGreaterThanOrEqual(1)
+
+    for (const family of seating) {
+      const { bandFloorMm, bandFirstOffsetMm } = family.anchor.seatsInArmSocket
+      const parts = partsIn(family)
+      const { name } = parts[0]!
+      const { tris, size } = recentred(family.dir, name)
+
+      // Probe just in from the width edge, inside the band's own thickness.
+      const bands = runs(
+        (t) => solidAt(tris, 1.5, t, bandFloorMm + 1.5),
+        size.y,
+      ).filter(([, , s]) => s)
+
+      expect(bands.length, `${family.id}: no rib lattice`).toBeGreaterThanOrEqual(2)
+      near(bands[0]![0], bandFirstOffsetMm, `${family.id} first band`)
+      for (let i = 1; i < bands.length; i++)
+        near(bands[i]![0] - bands[i - 1]![0], SOCKET.pitchMm, `${family.id} pitch`)
+      // A rib is 9.8 long against a 10.0 pocket: 0.1 mm of clearance a side.
+      for (const [a, b] of bands)
+        near(b - a, SOCKET.pocketLengthMm - 0.2, `${family.id} band length`)
     }
   })
 })

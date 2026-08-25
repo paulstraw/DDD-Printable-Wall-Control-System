@@ -82,7 +82,8 @@ export interface PartRow {
 function placementFor(
   family: Record<string, unknown>,
   parsed: { h: number | null; w: number | null; variant: string | null },
-  placed: { widthMm: number; depthMm: number; heightMm: number },
+  placed: { widthMm: number; depthMm: number },
+  armSocket: ArmSocket,
 ): PlacementRule {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rule = family as any
@@ -105,6 +106,10 @@ function placementFor(
 
   const columns = Math.max(1, Math.round(parsed.w ?? 1))
   const depth = rule.anchor.depth
+  const shelf = rule.anchor.seatsInArmSocket as
+    | { bandFloorMm: number; bandFirstOffsetMm: number }
+    | undefined
+
   return {
     occupiesColumns: columns,
     offsetFromSlotXMm: (COLUMN_PITCH_MM * columns - placed.widthMm) / 2,
@@ -112,41 +117,61 @@ function placementFor(
     // because what used to be its height is now how far it projects. Those
     // measure it; everything flat shares the mounting interface constant.
     frontFaceYMm: depth.fromMeasuredDepth
-      ? -(placed.depthMm - (depth.standoffMm ?? 0))
+      ? backEdgeY(shelf, armSocket) - placed.depthMm
       : depth.frontFaceYMm,
-    bottomBelowSlotCenterMm: rule.anchor.topAlignsWithCenterpieceTop
-      ? hangingFromCenterpieceTop(rule, parsed.h, placed.heightMm)
+    bottomBelowSlotCenterMm: shelf
+      ? seatedInArmSocket(shelf, armSocket)
       : bottomBelowSlotCenterMm,
     matesByHeight: rule.matesByHeight ?? true,
   }
 }
 
+/** The shared arm-socket lattice, read from families.json's top level. */
+export interface ArmSocket {
+  readonly pocketFloorBelowSidepieceTopMm: number
+  readonly firstPocketOutFromTangMm: number
+  readonly sidepieceTopAboveTopSlotCenterMm: number
+  readonly tangDepthMm: number
+}
+
 /**
- * Where a part hangs when only its top edge is anchored.
+ * Where a shelf's back edge sits, in wall Y.
  *
- * A centerpiece lying in the wall plane is located by its bottom, because it
- * fills the socket and its own height does the rest. One rotated out of that
- * plane is not: a Gridfinity shelf is 10.8 mm thick whatever its `h` says, so
- * anchoring the bottom would leave it floating below the socket. The socket
- * pocket ends a measured 6.6 mm below the sidepiece's top, and that edge is
- * where the top of a centerpiece of this height would land — so put the
- * shelf's top there and work back down by its own thickness.
+ * Not a free choice and not flush. The first pocket begins a measured 24.05
+ * out from the tang and a shelf's own first band sits 7.75 in from its back
+ * edge, so seating one in the other leaves the back edge standing 7.8 mm
+ * proud of the panel. Anything else draws the rib outside the pocket.
  */
-function hangingFromCenterpieceTop(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rule: any,
-  heightUnits: number | null,
-  thicknessMm: number,
+function backEdgeY(
+  shelf: { bandFirstOffsetMm: number } | undefined,
+  socket: ArmSocket,
+): number {
+  if (!shelf) return 0
+  return -(socket.firstPocketOutFromTangMm - shelf.bandFirstOffsetMm - socket.tangDepthMm)
+}
+
+/**
+ * Where a shelf sits vertically, as a drop from the slot centre.
+ *
+ * A centerpiece in the wall plane is located by its bottom and its own height
+ * finishes the job. A shelf has no height worth speaking of — 10.8 mm for a
+ * Gridfinity frame, 6.15 for a spacer — and its `h` means depth, so neither
+ * its height nor its parity can say where it goes. What holds it is the rib,
+ * in the arm pocket, and the pocket is at a fixed height above the slot the
+ * sidepiece tops out on: 20.35 up to the top, 12.9 back down to the pocket
+ * floor. Both keys carry the same number because there is no parity left to
+ * spend, and the value is negative because the shelf sits *above* the slot
+ * centre rather than below it.
+ */
+function seatedInArmSocket(
+  shelf: { bandFloorMm: number },
+  socket: ArmSocket,
 ): { odd: number; even: number } {
-  const units = Math.max(1, Math.round(heightUnits ?? 1))
-  const odd = units % 2 === 1
-  const drop = rule.anchor.bottomBelowSlotCenterMm
-  const bottom = odd ? drop.odd : drop.even
-  const nominal = rule.size.heightMm.perUnitMm * units + (rule.size.heightMm.constantMm ?? 0)
-  // Top of a flat centerpiece of this height, relative to the slot centre.
-  const top = nominal - bottom
-  // Both keys carry the same number: the part's own parity is already spent.
-  const value = Number((thicknessMm - top).toFixed(4))
+  const above =
+    socket.sidepieceTopAboveTopSlotCenterMm -
+    socket.pocketFloorBelowSidepieceTopMm -
+    shelf.bandFloorMm
+  const value = Number((-above).toFixed(4))
   return { odd: value, even: value }
 }
 
@@ -199,7 +224,19 @@ export interface IndexStats {
 export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
   const started = Date.now()
   const families = resolvedFamilies()
-  const unsupportedRules = (loadFamilies() as unknown as { unsupported?: UnsupportedRule[] }).unsupported ?? []
+  const file = loadFamilies() as unknown as {
+    unsupported?: UnsupportedRule[]
+    armSocket: Omit<ArmSocket, 'tangDepthMm'>
+    archetypes: { sidepiece: { anchor: { tang: { depthMm: number } } } }
+  }
+  const unsupportedRules = file.unsupported ?? []
+  // The tang depth is the depth datum every other rule here already uses, so
+  // the shelf standoff is measured from the same place rather than a second
+  // one that could drift from it.
+  const armSocket: ArmSocket = {
+    ...file.armSocket,
+    tangDepthMm: file.archetypes.sidepiece.anchor.tang.depthMm,
+  }
   const overrides = loadOverrides()
 
   rmSync(outDir, { recursive: true, force: true })
@@ -283,7 +320,6 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const size = placed.bounds
       const widthMm = size.max.x - size.min.x
       const depthMm = size.max.y - size.min.y
-      const heightMm = size.max.z - size.min.z
       parts.push({
         id,
         family: family.id as string,
@@ -313,7 +349,7 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         ...(unsupportedReasonFor(unsupportedRules, parsed.filename) !== undefined
           ? { unsupportedReason: unsupportedReasonFor(unsupportedRules, parsed.filename) }
           : {}),
-        placement: placementFor(family, parsed, { widthMm, depthMm, heightMm }),
+        placement: placementFor(family, parsed, { widthMm, depthMm }, armSocket),
       })
     }
   }

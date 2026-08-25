@@ -20,7 +20,14 @@ export interface PlacementRule {
   readonly offsetFromSlotXMm: number
   /** Front face, shared between a centerpiece and its sidepieces. */
   readonly frontFaceYMm: number
-  /** Drop from the engaged slot's centre to the part's bottom edge. */
+  /**
+   * Drop from the engaged slot's centre to the part's bottom edge.
+   *
+   * Negative for a shelf, which sits *above* the slot centre rather than
+   * below it — it is carried by the sidepiece's arm, and the arm is near the
+   * top. A shelf also puts the same number in both keys: parity keys off a
+   * part's height in grid units, and a shelf's `h` is its depth.
+   */
   readonly bottomBelowSlotCenterMm: { readonly odd: number; readonly even: number }
   /**
    * Whether this part lines up with its neighbour by grid height.
@@ -43,6 +50,10 @@ export interface SlotRef {
  * Parity keys off the part's own height in grid units, which is what makes
  * the 22.3 mm alternation come out right — odd and even parts engage
  * different slot phases.
+ *
+ * A shelf has no stake in this: its `h` says how far it projects, not how
+ * tall it is, so the indexer writes the same number into both keys and
+ * whichever this picks is the same answer.
  */
 export function bottomOffsetFor(rule: PlacementRule, heightUnits: number | null): number {
   const odd = heightUnits === null || Math.round(heightUnits) % 2 === 1

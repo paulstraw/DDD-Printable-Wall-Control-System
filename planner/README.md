@@ -114,7 +114,7 @@ npm run index     # build the part library from the STLs (~17s)
 npm run dev
 ```
 
-`npm test` runs 427 tests across the three packages. `npm run typecheck` covers all three under
+`npm test` runs 437 tests across the three packages. `npm run typecheck` covers all three under
 `strict` plus `noUncheckedIndexedAccess`.
 
 ### The spike check
