@@ -151,6 +151,42 @@ kbd {
   background: #fff;
 }
 
+/*
+ * Flat / shelf, in the header beside the selection it acts on.
+ *
+ * A segmented pair rather than one toggling button: the two orientations are
+ * peers, and with a mixed selection neither is pressed, which a single button
+ * has no way to say.
+ */
+.orientation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.45rem;
+  vertical-align: middle;
+}
+
+.orientation-toggle button {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.orientation-toggle button + button {
+  margin-left: -0.3rem;
+}
+
+.orientation-toggle button.is-current {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
 .viewport {
   flex: 1;
   min-height: 0;

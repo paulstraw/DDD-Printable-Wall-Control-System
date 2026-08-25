@@ -2,9 +2,9 @@ import { Suspense, useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { MeshoptDecoder } from 'meshoptimizer'
 import type { GLTFLoader } from 'three-stdlib'
-import { placementOrigin } from '@ddd-planner/core'
+import { type Orientation, placementOrigin } from '@ddd-planner/core'
 import { PARTS_BASE } from '../catalog/useCatalog'
-import type { CatalogPart } from '../store'
+import { type CatalogPart, orientedFor } from '../store'
 import { modifierHeld } from '../useModifier'
 
 /**
@@ -54,16 +54,27 @@ export function PartModel({
   part,
   col,
   row,
+  orientation,
   selected,
   onSelect,
 }: {
   part: CatalogPart
   col: number
   row: number
+  orientation: Orientation
   selected: boolean
   onSelect: (additive: boolean) => void
 }) {
-  const origin = placementOrigin(part.placement, part.h, { col, row })
+  const oriented = orientedFor(part, orientation)
+  const origin = placementOrigin(oriented.rule, part.h, { col, row })
+
+  // Assets ship rotated for their default orientation with the minimum corner
+  // at the origin, so turning one moves it off that corner and it has to be
+  // put back. A -90° turn about X sends the part's depth below the floor,
+  // hence the lift by exactly that depth. Three.js applies rotation before
+  // position, so the two compose in this order without further arithmetic.
+  const rad = (oriented.rotateXDeg * Math.PI) / 180
+  const lift = oriented.rotateXDeg === 0 ? 0 : oriented.sizeMm.y
 
   return (
     <group
@@ -78,7 +89,9 @@ export function PartModel({
       }}
     >
       <Suspense fallback={null}>
-        <Model part={part} selected={selected} />
+        <group rotation={[rad, 0, 0]} position={[0, 0, lift]}>
+          <Model part={part} selected={selected} />
+        </group>
       </Suspense>
     </group>
   )

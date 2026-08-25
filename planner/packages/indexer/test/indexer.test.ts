@@ -224,14 +224,14 @@ describe('the indexer, end to end', () => {
 
     // A Left hangs its body to -x from the slot; a Right to +x. These are the
     // numbers the spike check confirmed the joint closes on.
-    expect(by('3x0 Flat Left').placement.offsetFromSlotXMm).toBeCloseTo(-12.6, 2)
-    expect(by('3x0 Flat Right').placement.offsetFromSlotXMm).toBeCloseTo(-1.1, 2)
-    expect(by('3x0 Flat Center').placement.offsetFromSlotXMm).toBeCloseTo(-26.5, 2)
+    expect(by('3x0 Flat Left').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-12.6, 2)
+    expect(by('3x0 Flat Right').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-1.1, 2)
+    expect(by('3x0 Flat Center').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-26.5, 2)
 
     // A tabbed centerpiece overhangs its span by 2.7 a side; a tabless one
     // clears it by 1.2.
-    expect(by('3x3 Spacer blank').placement.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
-    expect(by('3x3 Spacer clip-on').placement.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
+    expect(by('3x3 Spacer blank').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
+    expect(by('3x3 Spacer clip-on').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
 
     // Centerpieces that hang in the plane of the wall share the
     // mounting-interface front face; sidepieces sit at their own depth, which
@@ -243,10 +243,13 @@ describe('the indexer, end to end', () => {
           (p: { family: string }) =>
             p.family.startsWith('centerpieces/') && p.family !== 'centerpieces/gridfinity',
         )
-        .map((p: { placement: { frontFaceYMm: number } }) => p.placement.frontFaceYMm),
+        .map(
+          (p: { orientations: { flat: { rule: { frontFaceYMm: number } } } }) =>
+            p.orientations.flat.rule.frontFaceYMm,
+        ),
     )
     expect(centerpieceFaces).toEqual(new Set([-10.2]))
-    expect(by('3x0 Flat Left').placement.frontFaceYMm).toBeCloseTo(-10.2, 1)
+    expect(by('3x0 Flat Left').orientations.flat.rule.frontFaceYMm).toBeCloseTo(-10.2, 1)
 
     // A Gridfinity frame is the exception: rotated a quarter turn out of the
     // wall, it is a shelf, so it projects by what the filename calls its
@@ -256,9 +259,9 @@ describe('the indexer, end to end', () => {
     // stands 7.8 mm proud and the front face is that much further out again.
     // Measured, not derived, so the 0.1 mm of model noise the families test
     // already tolerates shows up here too.
-    expect(by('5x7 Gridfinity Frame 3x4').placement.frontFaceYMm).toBeCloseTo(-126.8 - 7.8, 1)
+    expect(by('5x7 Gridfinity Frame 3x4').orientations.shelf.rule.frontFaceYMm).toBeCloseTo(-126.8 - 7.8, 1)
     expect(
-      Math.abs(by('2x10 Gridfinity Frame 1x6').placement.frontFaceYMm + 50.6 + 7.8),
+      Math.abs(by('2x10 Gridfinity Frame 1x6').orientations.shelf.rule.frontFaceYMm + 50.6 + 7.8),
     ).toBeLessThanOrEqual(0.15)
   })
 
@@ -267,7 +270,8 @@ describe('the indexer, end to end', () => {
     const by = (name: string) =>
       index.parts.find((p: { name: string }) => p.name === name) as {
         sizeMm: { x: number; y: number; z: number }
-        placement: { matesByHeight: boolean; bottomBelowSlotCenterMm: { odd: number; even: number } }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        orientations: any
       }
 
     // Rotated: the 3x4 grid's four columns run along the wall, its three rows
@@ -291,22 +295,24 @@ describe('the indexer, end to end', () => {
       '7x14 Gridfinity Frame 4x8',
     ]) {
       const part = index.parts.find((p: { name: string }) => p.name === name)
-      const { odd, even } = part.placement.bottomBelowSlotCenterMm
+      const { odd, even } = part.orientations.shelf.rule.bottomBelowSlotCenterMm
       expect(odd, name).toBeCloseTo(-7.45, 2)
       // Parity is already spent — a shelf has no height for it to key off.
       expect(even, name).toBe(odd)
     }
 
-    expect(frame.placement.matesByHeight).toBe(false)
+    expect(frame.orientations.shelf.rule.matesByHeight).toBe(false)
 
     // A Spacer blank of the same height still hangs flat, tall side up.
     const blank = by('4x7 Spacer blank')
     expect(blank.sizeMm.z).toBeCloseTo(101.4, 1)
-    expect(blank.placement.matesByHeight).toBe(true)
+    expect(blank.orientations.flat.rule.matesByHeight).toBe(true)
 
     // Nothing else in the library is rotated out of the wall plane.
     const rotated = index.parts
-      .filter((p: { placement: { matesByHeight: boolean } }) => !p.placement.matesByHeight)
+      .filter((p: { orientations: Record<string, { rule: { matesByHeight: boolean } }> }) =>
+        Object.values(p.orientations).every((o) => !o.rule.matesByHeight),
+      )
       .map((p: { family: string }) => p.family)
     expect(new Set(rotated)).toEqual(new Set(['centerpieces/gridfinity']))
   })
@@ -322,7 +328,11 @@ describe('the indexer, end to end', () => {
       // wide and still occupies a column.
       const expected =
         kindOf.get(part.family) === 'sidepiece' ? 1 : Math.max(1, Math.round(part.w))
-      expect(part.placement.occupiesColumns, part.name).toBe(expected)
+      // Gridfinity offers only a shelf, so read whichever orientation the
+      // part actually ships with — the column span is the same either way,
+      // because the turn is about the wall X axis.
+      const oriented = part.orientations.flat ?? part.orientations.shelf
+      expect(oriented.rule.occupiesColumns, part.name).toBe(expected)
     }
   })
 

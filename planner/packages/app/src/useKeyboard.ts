@@ -8,8 +8,9 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
- * Arrow keys nudge the selection by one slot; Delete removes it; Cmd/Ctrl+A
- * takes everything; Escape deselects or abandons a drag.
+ * Arrow keys nudge the selection by one slot; Delete removes it; R turns it
+ * between flat and shelf; Cmd/Ctrl+A takes everything; Escape deselects or
+ * abandons a drag.
  *
  * A nudge is a whole slot, not a pixel — there is nowhere else a part can go,
  * so free movement would only ever be undone by the snap. Every one of these
@@ -22,6 +23,7 @@ export function useKeyboard() {
   const select = useStore((s) => s.select)
   const cancelDrag = useStore((s) => s.cancelDrag)
   const selectAll = useStore((s) => s.selectAll)
+  const setOrientation = useStore((s) => s.setOrientation)
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -52,6 +54,17 @@ export function useKeyboard() {
         case 'Backspace':
           removeSelected()
           break
+        case 'r':
+        case 'R': {
+          // A toggle rather than two keys: with a mixed selection the first
+          // press makes the group agree on shelf, which is the reading that
+          // needs no explanation.
+          const { placements, selectedIds } = useStore.getState()
+          const chosen = placements.filter((p) => selectedIds.includes(p.id))
+          const allShelves = chosen.length > 0 && chosen.every((p) => p.orientation === 'shelf')
+          setOrientation(allShelves ? 'flat' : 'shelf')
+          break
+        }
         case 'Escape':
           cancelDrag()
           select(null)
@@ -64,5 +77,5 @@ export function useKeyboard() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nudge, removeSelected, select, cancelDrag, selectAll])
+  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation])
 }

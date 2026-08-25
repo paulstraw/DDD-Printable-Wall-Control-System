@@ -12,18 +12,18 @@ const wall: PlannerState = {
   widthIn: 48,
   heightIn: 32,
   placements: [
-    { partId: 'flat-left', col: 6, row: 4 },
-    { partId: 'blank-3', col: 7, row: 4 },
-    { partId: 'flat-right', col: 10, row: 4 },
-    { partId: 'flat-left', col: 6, row: 6 },
+    { partId: 'flat-left', col: 6, row: 4, orientation: 'flat' as const },
+    { partId: 'blank-3', col: 7, row: 4, orientation: 'flat' as const },
+    { partId: 'flat-right', col: 10, row: 4, orientation: 'flat' as const },
+    { partId: 'flat-left', col: 6, row: 6, orientation: 'flat' as const },
   ],
   assemblies: [
     {
       id: 'a1',
       name: 'Drill station',
       parts: [
-        { partId: 'flat-left', dCol: 0, dRow: 0 },
-        { partId: 'blank-3', dCol: 1, dRow: 0 },
+        { partId: 'flat-left', dCol: 0, dRow: 0, orientation: 'flat' as const },
+        { partId: 'blank-3', dCol: 1, dRow: 0, orientation: 'flat' as const },
       ],
     },
   ],
@@ -58,7 +58,7 @@ describe('toDocument', () => {
     const many: PlannerState = {
       widthIn: 32,
       heightIn: 32,
-      placements: Array.from({ length: 50 }, (_, i) => ({ partId: long, col: i, row: 2 })),
+      placements: Array.from({ length: 50 }, (_, i) => ({ partId: long, col: i, row: 2, orientation: 'flat' as const })),
       assemblies: [],
     }
     const encoded = encodeDocument(many)
@@ -147,12 +147,63 @@ describe('decodeDocument refuses bad input rather than guessing', () => {
   })
 
   it('rejects malformed, fractional or negative placements', () => {
-    const cases = ['[0,1]', '[0,1,1,1]', '[0,-1,1]', '[0,1.5,1]', '"nope"', 'null']
+    // A fourth element is an orientation code, so the rejections there are
+    // codes this version does not know rather than the length itself.
+    const cases = [
+      '[0,1]',
+      '[0,1,1,1,1]',
+      '[0,1,1,2]',
+      '[0,1,1,-1]',
+      '[0,1,1,1.5]',
+      '[0,-1,1]',
+      '[0,1.5,1]',
+      '"nope"',
+      'null',
+    ]
     for (const entry of cases) {
       expect(bad(`{"v":1,"w":[32,32],"d":["a"],"p":[${entry}],"a":[]}`)).toMatch(
         /damaged placement/,
       )
     }
+  })
+
+  it('reads a fourth element as the orientation, and its absence as flat', () => {
+    const doc = '{"v":1,"w":[32,32],"d":["a"],"p":[[0,1,1],[0,2,1,1]],"a":[]}'
+    const result = decodeDocument(doc)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.state.placements.map((p) => p.orientation)).toEqual(['flat', 'shelf'])
+  })
+
+  it('leaves a wall of flat parts encoding exactly as it did before shelves', () => {
+    // The reason orientation is an optional fourth element rather than a
+    // version bump: a share link for the common case must not get longer.
+    const state = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [
+        { partId: 'a', col: 1, row: 1, orientation: 'flat' as const },
+        { partId: 'b', col: 2, row: 1, orientation: 'flat' as const },
+      ],
+      assemblies: [],
+    }
+    expect(encodeDocument(state)).toBe('{"v":1,"w":[32,32],"d":["a","b"],"p":[[0,1,1],[1,2,1]],"a":[]}')
+  })
+
+  it('round-trips a shelf through encode and decode', () => {
+    const state = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [{ partId: 'a', col: 3, row: 2, orientation: 'shelf' as const }],
+      assemblies: [
+        { id: 'a1', name: 'Shelf', parts: [{ partId: 'a', dCol: 0, dRow: 0, orientation: 'shelf' as const }] },
+      ],
+    }
+    const result = decodeDocument(encodeDocument(state))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.state.placements[0]!.orientation).toBe('shelf')
+    expect(result.state.assemblies[0]!.parts[0]!.orientation).toBe('shelf')
   })
 
   it('names the assembly whose parts are damaged', () => {
@@ -193,7 +244,7 @@ describe('unknownPartIds', () => {
       widthIn: 32,
       heightIn: 32,
       placements: [],
-      assemblies: [{ id: 'a1', name: 'x', parts: [{ partId: 'ghost', dCol: 0, dRow: 0 }] }],
+      assemblies: [{ id: 'a1', name: 'x', parts: [{ partId: 'ghost', dCol: 0, dRow: 0, orientation: 'flat' as const }] }],
     }
     expect(unknownPartIds(state, known)).toEqual(['ghost'])
   })

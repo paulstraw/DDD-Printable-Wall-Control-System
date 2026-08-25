@@ -18,6 +18,7 @@ export function PlacedParts() {
             part={part}
             col={placement.col}
             row={placement.row}
+            orientation={placement.orientation}
             selected={selectedIds.includes(placement.id)}
             onSelect={(additive) =>
               select(placement.id, additive ? 'toggle' : 'replace')

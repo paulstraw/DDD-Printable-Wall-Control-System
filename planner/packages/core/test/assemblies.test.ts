@@ -13,17 +13,17 @@ import {
 // A left flat, a 3-wide blank spanning to the right, and a right flat —
 // the joint the whole project is built around.
 const joint = [
-  { partId: 'flat-left', col: 6, row: 4 },
-  { partId: 'blank-3', col: 7, row: 4 },
-  { partId: 'flat-right', col: 10, row: 4 },
+  { partId: 'flat-left', col: 6, row: 4, orientation: 'flat' as const },
+  { partId: 'blank-3', col: 7, row: 4, orientation: 'flat' as const },
+  { partId: 'flat-right', col: 10, row: 4, orientation: 'flat' as const },
 ]
 
 describe('relativeParts', () => {
   it('rebases onto the group corner, not the wall corner', () => {
     expect(relativeParts(joint)).toEqual([
-      { partId: 'flat-left', dCol: 0, dRow: 0 },
-      { partId: 'blank-3', dCol: 1, dRow: 0 },
-      { partId: 'flat-right', dCol: 4, dRow: 0 },
+      { partId: 'flat-left', dCol: 0, dRow: 0, orientation: 'flat' as const },
+      { partId: 'blank-3', dCol: 1, dRow: 0, orientation: 'flat' as const },
+      { partId: 'flat-right', dCol: 4, dRow: 0, orientation: 'flat' as const },
     ])
   })
 
@@ -35,12 +35,12 @@ describe('relativeParts', () => {
   it('anchors on the minimum of both axes independently', () => {
     // The leftmost part is not the lowest one.
     const stack = [
-      { partId: 'a', col: 2, row: 9 },
-      { partId: 'b', col: 8, row: 3 },
+      { partId: 'a', col: 2, row: 9, orientation: 'flat' as const },
+      { partId: 'b', col: 8, row: 3, orientation: 'flat' as const },
     ]
     expect(relativeParts(stack)).toEqual([
-      { partId: 'a', dCol: 0, dRow: 6 },
-      { partId: 'b', dCol: 6, dRow: 0 },
+      { partId: 'a', dCol: 0, dRow: 6, orientation: 'flat' as const },
+      { partId: 'b', dCol: 6, dRow: 0, orientation: 'flat' as const },
     ])
   })
 
@@ -55,15 +55,15 @@ describe('relativeParts', () => {
 
   it('keeps repeats rather than collapsing them', () => {
     const pair = [
-      { partId: 'hook', col: 3, row: 3 },
-      { partId: 'hook', col: 5, row: 3 },
+      { partId: 'hook', col: 3, row: 3, orientation: 'flat' as const },
+      { partId: 'hook', col: 5, row: 3, orientation: 'flat' as const },
     ]
     expect(relativeParts(pair)).toHaveLength(2)
   })
 
   it('handles a single part and an empty selection', () => {
-    expect(relativeParts([{ partId: 'a', col: 9, row: 9 }])).toEqual([
-      { partId: 'a', dCol: 0, dRow: 0 },
+    expect(relativeParts([{ partId: 'a', col: 9, row: 9, orientation: 'flat' as const }])).toEqual([
+      { partId: 'a', dCol: 0, dRow: 0, orientation: 'flat' as const },
     ])
     expect(relativeParts([])).toEqual([])
   })
@@ -75,7 +75,7 @@ describe('assemblyExtent', () => {
   })
 
   it('is one by one for a single part', () => {
-    expect(assemblyExtent([{ partId: 'a', dCol: 0, dRow: 0 }])).toEqual({ cols: 1, rows: 1 })
+    expect(assemblyExtent([{ partId: 'a', dCol: 0, dRow: 0, orientation: 'flat' as const }])).toEqual({ cols: 1, rows: 1 })
   })
 
   it('is zero by zero for nothing', () => {
@@ -87,9 +87,9 @@ describe('assemblyPartCounts', () => {
   it('counts each distinct part', () => {
     const counts = assemblyPartCounts(
       relativeParts([
-        { partId: 'flat-left', col: 0, row: 0 },
-        { partId: 'flat-right', col: 4, row: 0 },
-        { partId: 'flat-left', col: 0, row: 2 },
+        { partId: 'flat-left', col: 0, row: 0, orientation: 'flat' as const },
+        { partId: 'flat-right', col: 4, row: 0, orientation: 'flat' as const },
+        { partId: 'flat-left', col: 0, row: 2, orientation: 'flat' as const },
       ]),
     )
     expect(counts.get('flat-left')).toBe(2)
@@ -155,9 +155,9 @@ describe('createAssembly and absoluteParts', () => {
       id: 'a1',
       name: 'Drill station',
       parts: [
-        { partId: 'flat-left', dCol: 0, dRow: 0 },
-        { partId: 'blank-3', dCol: 1, dRow: 0 },
-        { partId: 'flat-right', dCol: 4, dRow: 0 },
+        { partId: 'flat-left', dCol: 0, dRow: 0, orientation: 'flat' as const },
+        { partId: 'blank-3', dCol: 1, dRow: 0, orientation: 'flat' as const },
+        { partId: 'flat-right', dCol: 4, dRow: 0, orientation: 'flat' as const },
       ],
     })
     expect(JSON.stringify(assembly)).not.toContain('"col"')
@@ -170,9 +170,9 @@ describe('createAssembly and absoluteParts', () => {
   it('places anywhere else with the shape intact', () => {
     const moved = absoluteParts(assembly, { col: 0, row: 11 })
     expect(moved).toEqual([
-      { partId: 'flat-left', col: 0, row: 11 },
-      { partId: 'blank-3', col: 1, row: 11 },
-      { partId: 'flat-right', col: 4, row: 11 },
+      { partId: 'flat-left', col: 0, row: 11, orientation: 'flat' as const },
+      { partId: 'blank-3', col: 1, row: 11, orientation: 'flat' as const },
+      { partId: 'flat-right', col: 4, row: 11, orientation: 'flat' as const },
     ])
     // Same shape, different place.
     expect(relativeParts(moved)).toEqual(assembly.parts)

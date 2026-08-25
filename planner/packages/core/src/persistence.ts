@@ -18,6 +18,7 @@
  */
 
 import type { Assembly, AssemblyPart, PlacedRef } from './assemblies'
+import type { Orientation } from './placement'
 
 export const DOCUMENT_VERSION = 1
 
@@ -29,10 +30,13 @@ export interface PlannerDocument {
   readonly w: readonly [number, number]
   /** Part id dictionary; placements and assemblies index into it. */
   readonly d: readonly string[]
-  /** Placements as `[dictIndex, col, row]`. */
-  readonly p: readonly (readonly [number, number, number])[]
-  /** Assemblies as `[name, [[dictIndex, dCol, dRow], ...]]`. */
-  readonly a: readonly (readonly [string, readonly (readonly [number, number, number])[]])[]
+  /**
+   * Placements as `[dictIndex, col, row]`, or `[dictIndex, col, row, o]`
+   * where the part is not mounted flat.
+   */
+  readonly p: readonly (readonly number[])[]
+  /** Assemblies as `[name, [[dictIndex, dCol, dRow, o?], ...]]`. */
+  readonly a: readonly (readonly [string, readonly (readonly number[])[]])[]
 }
 
 export interface PlannerState {
@@ -61,14 +65,16 @@ export function toDocument(state: PlannerState): PlannerDocument {
     return dictionary.length - 1
   }
 
-  const p = state.placements.map(
-    (placement) => [intern(placement.partId), placement.col, placement.row] as const,
+  const p = state.placements.map((placement) =>
+    writeRow(intern(placement.partId), placement.col, placement.row, placement.orientation),
   )
   const a = state.assemblies.map(
     (assembly) =>
       [
         assembly.name,
-        assembly.parts.map((part) => [intern(part.partId), part.dCol, part.dRow] as const),
+        assembly.parts.map((part) =>
+          writeRow(intern(part.partId), part.dCol, part.dRow, part.orientation),
+        ),
       ] as const,
   )
 
@@ -96,12 +102,32 @@ function isIndex(value: unknown): value is number {
   return isFiniteNumber(value) && Number.isInteger(value) && value >= 0
 }
 
-function readTriple(value: unknown, dictSize: number): [number, number, number] | null {
-  if (!Array.isArray(value) || value.length !== 3) return null
-  const [id, a, b] = value as unknown[]
+/**
+ * Orientation codes. Absent means flat, which is what every document written
+ * before shelves existed means, and what most rows still mean today.
+ */
+const ORIENTATION_CODES: Record<number, Orientation> = { 0: 'flat', 1: 'shelf' }
+const CODE_FOR: Record<Orientation, number> = { flat: 0, shelf: 1 }
+
+/** The compact form of a placement, with orientation appended only when set. */
+function writeRow(index: number, a: number, b: number, orientation: Orientation): number[] {
+  // Omitting the common case is what keeps a share link the length it was:
+  // a wall with no shelves encodes to exactly the bytes it did before.
+  return orientation === 'flat' ? [index, a, b] : [index, a, b, CODE_FOR[orientation]]
+}
+
+function readTriple(
+  value: unknown,
+  dictSize: number,
+): [number, number, number, Orientation] | null {
+  if (!Array.isArray(value) || (value.length !== 3 && value.length !== 4)) return null
+  const [id, a, b, o] = value as unknown[]
   if (!isIndex(id) || id >= dictSize) return null
   if (!isIndex(a) || !isIndex(b)) return null
-  return [id, a, b]
+  // A code this version does not know is a document from the future in
+  // miniature, and gets the same treatment: refused, not guessed at.
+  if (o !== undefined && (!isIndex(o) || ORIENTATION_CODES[o] === undefined)) return null
+  return [id, a, b, o === undefined ? 'flat' : ORIENTATION_CODES[o as number]!]
 }
 
 export function decodeDocument(text: string): DecodeResult {
@@ -152,7 +178,12 @@ export function decodeDocument(text: string): DecodeResult {
     // One bad row means the file is not what it claims. Silently dropping it
     // would hand back a wall missing parts with no hint why.
     if (!triple) return { ok: false, error: 'That wall has a damaged placement.' }
-    placements.push({ partId: ids[triple[0]]!, col: triple[1], row: triple[2] })
+    placements.push({
+      partId: ids[triple[0]]!,
+      col: triple[1],
+      row: triple[2],
+      orientation: triple[3],
+    })
   }
 
   const assembliesRaw = doc.a ?? []
@@ -171,7 +202,12 @@ export function decodeDocument(text: string): DecodeResult {
     for (const part of partsRaw) {
       const triple = readTriple(part, ids.length)
       if (!triple) return { ok: false, error: `Assembly “${name}” has a damaged part.` }
-      parts.push({ partId: ids[triple[0]]!, dCol: triple[1], dRow: triple[2] })
+      parts.push({
+        partId: ids[triple[0]]!,
+        dCol: triple[1],
+        dRow: triple[2],
+        orientation: triple[3],
+      })
     }
     assemblies.push({ id: `a${i + 1}`, name, parts })
   }

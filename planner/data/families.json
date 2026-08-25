@@ -232,6 +232,10 @@
       "archetype": "centerpiece",
       "dir": "Sidepieces/Retainers",
       "label": "Retainer",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.7 },
+      "shelfNote": "Ribbed on one edge only, so as a shelf it is a tongue cantilevered off a single sidepiece rather than a plate spanning two. That is a real way to use one and the lattice fits, but the lock pin does not survive the turn - see the fastener rule.",
       "dimensionOrder": "height x width",
       "parts": 15,
       "size": {
@@ -244,7 +248,8 @@
         {
           "match": "locking retainer",
           "fasteners": [{ "id": "8mm Lock Pin", "quantity": 1 }],
-          "note": "Sidepieces/README.md: a standard retainer just holds the sidepiece against the board and needs nothing. Only the wider locking retainers take the 8 mm lock pin."
+          "fastenersByOrientation": { "shelf": [] },
+          "note": "Sidepieces/README.md: a standard retainer just holds the sidepiece against the board and needs nothing. Only the wider locking retainers take the 8 mm lock pin - and only mounted flat, because the pin passes through the plate into the panel and a horizontal plate points it at the ceiling."
         }
       ]
     },
@@ -254,6 +259,10 @@
       "archetype": "centerpiece",
       "dir": "Centerpieces/Spacer_blank",
       "label": "Spacer blank",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.75 },
+      "shelfNote": "Upstream calls this one a “great choice for horizontal use as a shelf”, and the geometry agrees: the same ribs that sit in the back plate's vertical groove sit in the arm's pockets when the plate is turned.",
       "dimensionOrder": "height x width",
       "parts": 28,
       "size": {
@@ -268,6 +277,10 @@
       "archetype": "centerpiece",
       "dir": "Centerpieces/Spacer_perforated",
       "label": "Spacer perforated",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.75 },
+      "shelfNote": "The same plate as Spacer blank with holes in it, and the same rib lattice, so it turns the same way.",
       "dimensionOrder": "height x width",
       "parts": 18,
       "size": {
@@ -282,6 +295,10 @@
       "archetype": "centerpiece",
       "dir": "Centerpieces/Spacer_clip-on",
       "label": "Spacer clip-on",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 2.25, "bandFirstOffsetMm": 7.6 },
+      "shelfNote": "Pinned, like Spacer blank flush, and measuring the same notch lattice to within 0.05.",
       "dimensionOrder": "height x width",
       "parts": 12,
       "size": {
@@ -300,6 +317,10 @@
       "archetype": "centerpiece",
       "dir": "Centerpieces/Spacer_blank_flush",
       "label": "Spacer blank flush",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 2.35, "bandFirstOffsetMm": 7.6 },
+      "shelfNote": "Pinned rather than ribbed, and upstream calls it “another good choice for horizontal use as a shelf”. Where a ribbed family fills the arm pocket with its own rib, this one cuts a matching 10.0 mm notch and a 4x10x8 mm pin bridges the two recesses, 4 mm into each. Same lattice, 7.60 rather than 7.75 because a pin fills its notch exactly where a 9.8 mm rib leaves 0.1 a side. The notch sits 2.35 into the plate's thickness rather than flush with its face, which is the whole of why bandFloorMm exists.",
       "dimensionOrder": "height x width",
       "parts": 17,
       "size": {
@@ -322,12 +343,18 @@
       "archetype": "centerpiece",
       "dir": "Centerpieces/Locking_spacer",
       "label": "Locking spacer",
+
+      "orientations": ["flat", "shelf"],
+      "shelf": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.7 },
+      "shelfNote": "Same rib lattice as the blank. What does not survive the turn is the lock pin - see fastenersByOrientation.",
       "dimensionOrder": "height x width",
       "parts": 42,
       "size": { "thicknessMm": { "constant": 6.15 } },
       "sizeNote": "Widths span 1-14 columns and do not fit one formula; measured per part.",
       "fasteners": [{ "id": "8mm Lock Pin", "quantity": 1 }],
-      "fastenersNote": "Centerpieces/Locking_spacer/README.md describes an array of threaded holes and one positive-lock pin screwed into any of them. One is the minimum that locks the part; using more is the owner's choice, so one is what the print list claims."
+      "fastenersNote": "Centerpieces/Locking_spacer/README.md describes an array of threaded holes and one positive-lock pin screwed into any of them. One is the minimum that locks the part; using more is the owner's choice, so one is what the print list claims.",
+      "fastenersByOrientation": { "shelf": [] },
+      "fastenersByOrientationNote": "The threaded holes run through the plate, perpendicular to it, so the pin passes through the part and into a 1/4 inch hole in the panel. Mounted flat the plate is parallel to the panel and the pin reaches it. Turned into a shelf the plate is horizontal and the pin points at the ceiling, so there is nothing to lock to and nothing to print."
     },
     {
       "id": "centerpieces/u_hooks",
@@ -362,15 +389,13 @@
       "matesByHeight": false,
       "matesByHeightNote": "A shelf does not have to match the height of the sidepiece beside it, because its wall-space height is its 10.8 mm thickness rather than 25.4h - 0.2. Comparing h to a neighbour's h would warn about the wrong thing in both directions.",
 
-      "anchor": {
-        "seatsInArmSocket": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.75 },
-        "seatsInArmSocketNote": "Located by its rib, not by its top and not by its bottom. A centerpiece lying in the wall plane is located by its bottom because it fills the socket and 25.4h - 0.2 does the rest; a shelf is 10.8 mm thick whatever its h says, so that anchor drops it clear of the socket. What actually holds it is the rib, in the arm pocket, so that is what the planner lines up: bandFloorMm is where the rib starts within the part's own thickness (0.00 here - the rib is flush with the face it sits on) and bandFirstOffsetMm is how far the first band is in from the back edge. Both measured; both re-derived by the indexer test. Everything else follows from armSocket above.",
-        "seatsInArmSocketCorrection": "This replaces a rule that anchored the frame's top 6.6 mm below the sidepiece top and stood its back edge flush with the panel. Both were wrong, and by the same mistake: 6.6 is the edge of the *back plate's* vertical socket, checked against a tab at 39.8..43.6 in the height axis. A shelf's rib is horizontal and cannot enter a 3.8 mm-deep vertical slot - it belongs in the arm pocket, whose floor is 12.9 below the top and whose first pocket starts 24.05 out from the tang. Seating it properly moves the frame 4.5 mm up and 7.8 mm out.",
-        "depth": {
-          "fromMeasuredDepth": true,
-          "note": "Depth is the filename's height dimension once rotated - 50.6, 101.4, 126.8 or 177.6 mm - so it comes from the mesh rather than the archetype's single constant. Where the back edge lands is not free: the first pocket is 24.05 out from the tang and the first band is 7.75 in from the edge, so the back edge stands 7.8 mm proud of the panel and nothing can push it flush."
-        }
-      }
+      "orientations": ["shelf"],
+      "orientationsNote": "The only family with no flat orientation at all. Gridfinity is a horizontal system; a frame laid against the panel with its cells facing the room is not a thing anyone builds.",
+
+      "shelf": { "bandFloorMm": 0.0, "bandFirstOffsetMm": 7.75 },
+      "shelfNote": "Located by its rib, not by its top and not by its bottom. A centerpiece lying in the wall plane is located by its bottom because it fills the socket and 25.4h - 0.2 does the rest; a shelf is 10.8 mm thick whatever its h says, so that anchor drops it clear of the socket. What actually holds it is the rib, in the arm pocket, so that is what the planner lines up: bandFloorMm is where the rib starts within the part's own thickness (0.00 here - the rib is flush with the face it sits on) and bandFirstOffsetMm is how far the first band is in from the back edge. Both measured; both re-derived by the indexer test. Everything else follows from armSocket above.",
+      "shelfCorrection": "This replaces a rule that anchored the frame's top 6.6 mm below the sidepiece top and stood its back edge flush with the panel. Both were wrong, and by the same mistake: 6.6 is the edge of the *back plate's* vertical socket, checked against a tab at 39.8..43.6 in the height axis. A shelf's rib is horizontal and cannot enter a 3.8 mm-deep vertical slot - it belongs in the arm pocket, whose floor is 12.9 below the top and whose first pocket starts 24.05 out from the tang. Seating it properly moves the frame 4.5 mm up and 7.8 mm out.",
+      "shelfDepthNote": "Depth is the filename's height dimension once rotated - 50.6, 101.4, 126.8 or 177.6 mm - so it comes from the mesh rather than the archetype's single constant. Where the back edge lands is not free: the first pocket is 24.05 out from the tang and the first band is 7.75 in from the edge, so the back edge stands 7.8 mm proud of the panel and nothing can push it flush."
     },
     {
       "id": "centerpieces/honeycomb_storage_wall",

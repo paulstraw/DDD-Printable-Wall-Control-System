@@ -13,12 +13,23 @@
  * same 50.8 mm; nothing re-phases.
  */
 
+import type { Orientation } from './placement'
+
 export interface AssemblyPart {
   readonly partId: string
   /** Slot columns right of the assembly's own left edge. */
   readonly dCol: number
   /** Slot rows above the assembly's own bottom edge. */
   readonly dRow: number
+  /**
+   * Which way the part was mounted when the assembly was saved.
+   *
+   * Part of the assembly, not of the part: a shelf between two brackets and
+   * the same plate hanging flat between the same two brackets are different
+   * things to have built, and re-placing the group has to give back the one
+   * that was saved.
+   */
+  readonly orientation: Orientation
 }
 
 export interface Assembly {
@@ -31,6 +42,7 @@ export interface PlacedRef {
   readonly partId: string
   readonly col: number
   readonly row: number
+  readonly orientation: Orientation
 }
 
 /**
@@ -53,6 +65,7 @@ export function relativeParts(placements: readonly PlacedRef[]): AssemblyPart[] 
     partId: p.partId,
     dCol: p.col - minCol,
     dRow: p.row - minRow,
+    orientation: p.orientation,
   }))
 }
 
@@ -131,5 +144,6 @@ export function absoluteParts(
     partId: p.partId,
     col: anchor.col + p.dCol,
     row: anchor.row + p.dRow,
+    orientation: p.orientation,
   }))
 }

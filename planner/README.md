@@ -92,6 +92,29 @@ Two families are not what their folder implies, and the archetype is what gets t
 `Sidepieces/Retainers` behaves as a centerpiece (it clips onto an assembly), and Quickhooks
 hang from the slots like a sidepiece.
 
+### A spacer is a wall plate or a shelf, and only you know which
+
+A sidepiece has two sockets. The back plate carries a vertical groove that holds a centerpiece
+flat against the panel; the **arm** carries a second one, running out along the projection, that
+holds the same centerpiece lying horizontal as a shelf. Your own READMEs recommend both —
+"great choice for horizontal use as a shelf" — and nothing about the part decides it.
+
+So orientation lives on the **placement**, not the catalog row. Select a spacer and press
+<kbd>R</kbd>, or use the Flat/Shelf control that appears. Six families offer both; Gridfinity
+frames offer only the shelf, because a frame with its cells facing the room is not a thing
+anyone builds.
+
+The joint is one 25.4 mm lattice on both sides. A sidepiece's arm has a 10.0 mm pocket per inch
+it projects; every shelf-capable centerpiece has a matching band per grid unit — a rib that fills
+the pocket, or, on the pinned families, a notch that a 4x10x8 mm pin bridges 4 mm into each side.
+That fit is 0.1 mm a side, twice, which is what says it is intended. `data/families.json` states
+the lattice once and `families.test.ts` re-derives every number of it from the meshes.
+
+Two things follow that are easy to get wrong. A shelf's `h` is **depth**, not height, so it
+cannot line up with a neighbour by grid height and does not try to. And a shelf reaching further
+than the bracket beside it has ribs hanging in the air — invisible in a render, so the issues
+panel says so.
+
 ### When a part is wrong
 
 `planner/data/overrides.json` corrects individual parts whose *names* disagree with their
@@ -114,7 +137,7 @@ npm run index     # build the part library from the STLs (~17s)
 npm run dev
 ```
 
-`npm test` runs 437 tests across the three packages. `npm run typecheck` covers all three under
+`npm test` runs 456 tests across the three packages. `npm run typecheck` covers all three under
 `strict` plus `noUncheckedIndexedAccess`.
 
 ### The spike check

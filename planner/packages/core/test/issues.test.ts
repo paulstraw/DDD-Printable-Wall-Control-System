@@ -1,27 +1,63 @@
 import { describe, expect, it } from 'vitest'
 import { type IssuePart, type IssuePlacement, countByKind, findIssues } from '../src/issues'
+import type { Orientation, OrientedPlacement, PlacementRule } from '../src/placement'
+import type { Vec3 } from '../src/transforms'
 
 /** Real numbers, taken from the placement rules the indexer bakes. */
-function part(over: Partial<IssuePart> & { name: string }): IssuePart {
+const SIDEPIECE_RULE: PlacementRule = {
+  occupiesColumns: 1,
+  offsetFromSlotXMm: -12.6,
+  frontFaceYMm: -10.2,
+  bottomBelowSlotCenterMm: { odd: 14.55, even: 36.85 },
+  matesByHeight: true,
+}
+
+type PartSpec = Omit<Partial<IssuePart>, 'orientations'> & {
+  name: string
+  placement?: PlacementRule
+  sizeMm?: Partial<Vec3>
+  /** Only the families that can be turned get a second entry. */
+  shelf?: OrientedPlacement
+}
+
+function part(spec: PartSpec): IssuePart {
+  const { placement, sizeMm, shelf, ...rest } = spec
+  const flat: OrientedPlacement = {
+    rule: placement ?? SIDEPIECE_RULE,
+    sizeMm: { x: 13.7, y: 18.7, z: 85.7, ...sizeMm },
+    rotateXDeg: 0,
+  }
   return {
     h: 3,
     role: 'sidepiece',
     supported: true,
-    placement: {
-      occupiesColumns: 1,
-      offsetFromSlotXMm: -12.6,
+    orientations: shelf ? { flat, shelf } : { flat },
+    ...rest,
+  }
+}
+
+/** A centerpiece turned out of the wall plane, as the indexer bakes one. */
+function asShelf(rule: Partial<PlacementRule>, sizeMm: Partial<Vec3>): OrientedPlacement {
+  return {
+    rule: {
+      occupiesColumns: 3,
+      offsetFromSlotXMm: -2.7,
       frontFaceYMm: -10.2,
-      bottomBelowSlotCenterMm: { odd: 14.55, even: 36.85 },
-      matesByHeight: true,
+      bottomBelowSlotCenterMm: { odd: -7.45, even: -7.45 },
+      matesByHeight: false,
+      ...rule,
     },
-    sizeMm: { z: 85.7 },
-    ...over,
+    sizeMm: { x: 81.6, y: 76, z: 6.15, ...sizeMm },
+    rotateXDeg: -90,
   }
 }
 
 const catalog = new Map<string, IssuePart>([
   ['flat-left', part({ name: '3x0 Flat Left' })],
-  ['flat-right', part({ name: '3x0 Flat Right', placement: { ...part({ name: '' }).placement, offsetFromSlotXMm: -1.1 } })],
+  [
+    'flat-right',
+    part({ name: '3x0 Flat Right', placement: { ...SIDEPIECE_RULE, offsetFromSlotXMm: -1.1 } }),
+  ],
   [
     'blank-3',
     part({
@@ -35,6 +71,8 @@ const catalog = new Map<string, IssuePart>([
         matesByHeight: true,
       },
       sizeMm: { z: 76 },
+      // 3 units deep as a shelf, so it needs a bracket reaching 84 mm.
+      shelf: asShelf({ frontFaceYMm: -83.8 }, { y: 76, z: 6.15 }),
     }),
   ],
   [
@@ -63,13 +101,23 @@ const catalog = new Map<string, IssuePart>([
     }),
   ],
   ['quickhook', part({ name: 'Quickhook 3in Heavy', h: null })],
+  // A 2x2 L bracket reaches 58.65 mm; a 2x4 reaches 109.45.
+  ['bracket-2', part({ name: '2x2 L Bracket Flat Left', h: 2, placement: { ...SIDEPIECE_RULE, frontFaceYMm: -58.65 } })],
+  ['bracket-4', part({ name: '2x4 L Bracket Flat Left', h: 2, placement: { ...SIDEPIECE_RULE, frontFaceYMm: -109.45 } })],
 ])
 
-const at = (id: string, partId: string, col: number, row: number): IssuePlacement => ({
+const at = (
+  id: string,
+  partId: string,
+  col: number,
+  row: number,
+  orientation: Orientation = 'flat',
+): IssuePlacement => ({
   id,
   partId,
   col,
   row,
+  orientation,
 })
 
 /** The joint the whole project is built around: left, centre, right. */
@@ -265,6 +313,67 @@ describe('robustness', () => {
   })
 })
 
+describe('a shelf that overruns what holds it', () => {
+  // A shelf drops one rib into each pocket along the arm, and an arm has one
+  // pocket per inch it projects. A 3-deep shelf on a 2-deep bracket has a rib
+  // hanging in the air, and the render cannot show it — the planner draws the
+  // shelf where it would sit if the bracket were long enough.
+  it('warns when the shelf reaches past the deepest sidepiece beside it', () => {
+    const issues = findIssues(
+      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-2', 3, 2)],
+      catalog,
+    )
+    const overrun = issues.filter((i) => i.kind === 'unsupported-shelf')
+    expect(overrun).toHaveLength(1)
+    expect(overrun[0]?.message).toContain('84 mm')
+    expect(overrun[0]?.message).toContain('59 mm')
+    expect(overrun[0]?.placementIds).toEqual(['s', 'l'])
+  })
+
+  it('says nothing when the bracket is long enough', () => {
+    const issues = findIssues(
+      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 3, 2)],
+      catalog,
+    )
+    expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
+  })
+
+  it('judges by the deepest neighbour, not by every neighbour', () => {
+    // Held at one end by a bracket that reaches: not the problem this warns
+    // about, which is a shelf nothing beside it can carry.
+    const issues = findIssues(
+      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-2', 3, 2), at('r', 'bracket-4', 7, 2)],
+      catalog,
+    )
+    expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
+  })
+
+  it('leaves the same part alone when it is mounted flat', () => {
+    const issues = findIssues(
+      [at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 3, 2)],
+      catalog,
+    )
+    expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
+  })
+
+  it('does not warn about a shelf with no sidepiece at all — that is unmounted', () => {
+    const issues = findIssues([at('s', 'blank-3', 4, 2, 'shelf')], catalog)
+    expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
+    expect(issues.filter((i) => i.kind === 'unmounted')).toHaveLength(1)
+  })
+
+  it('stops comparing a shelf to its neighbour by grid height', () => {
+    // Flat, a 3-high plate beside a 2-high bracket is a mismatch worth
+    // saying. As a shelf the plate's h is depth, so the comparison is
+    // meaningless and matesByHeight turns it off.
+    const flat = findIssues([at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 3, 2)], catalog)
+    expect(flat.filter((i) => i.kind === 'height-mismatch')).toHaveLength(1)
+
+    const shelf = findIssues([at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 3, 2)], catalog)
+    expect(shelf.filter((i) => i.kind === 'height-mismatch')).toEqual([])
+  })
+})
+
 describe('countByKind', () => {
   it('counts every kind, including the zeroes', () => {
     const issues = findIssues([at('p1', 'horizontal', 6, 4)], catalog)
@@ -272,7 +381,7 @@ describe('countByKind', () => {
       overlap: 0,
       'height-mismatch': 0,
       unmounted: 1,
-      unsupported: 1,
+      unsupported: 1, 'unsupported-shelf': 0,
     })
   })
 
@@ -281,7 +390,7 @@ describe('countByKind', () => {
       overlap: 0,
       'height-mismatch': 0,
       unmounted: 0,
-      unsupported: 0,
+      unsupported: 0, 'unsupported-shelf': 0,
     })
   })
 })

@@ -13,7 +13,12 @@
  * Quickhook is a sidepiece.
  */
 
-import { type PlacementRule, occupiedColumns, placementOrigin } from './placement'
+import {
+  type Orientation,
+  type OrientedPlacement,
+  occupiedColumns,
+  placementOrigin,
+} from './placement'
 
 export type IssueKind =
   /** Two parts want the same slot. */
@@ -24,6 +29,8 @@ export type IssueKind =
   | 'unmounted'
   /** A horizontal-panel part on a vertical wall. */
   | 'unsupported'
+  /** A shelf reaching further out than anything beside it can hold. */
+  | 'unsupported-shelf'
 
 export interface Issue {
   /**
@@ -47,8 +54,13 @@ export interface IssuePart {
   readonly role: 'sidepiece' | 'centerpiece'
   readonly supported: boolean
   readonly unsupportedReason?: string
-  readonly placement: PlacementRule
-  readonly sizeMm: { readonly z: number }
+  /**
+   * Every way this part can be mounted. Rotating one changes its wall-space
+   * extents and whether it mates by height at all, so the checks below read
+   * the orientation the placement actually uses rather than the part's
+   * default.
+   */
+  readonly orientations: Readonly<Partial<Record<Orientation, OrientedPlacement>>>
 }
 
 export interface IssuePlacement {
@@ -56,6 +68,7 @@ export interface IssuePlacement {
   readonly partId: string
   readonly col: number
   readonly row: number
+  readonly orientation: Orientation
 }
 
 /**
@@ -68,6 +81,7 @@ const TOUCH_TOLERANCE_MM = 0.5
 interface Span {
   readonly placement: IssuePlacement
   readonly part: IssuePart
+  readonly oriented: OrientedPlacement
   readonly cols: readonly number[]
   readonly minCol: number
   readonly maxCol: number
@@ -75,17 +89,24 @@ interface Span {
   readonly zMax: number
 }
 
-function spanFor(placement: IssuePlacement, part: IssuePart): Span {
-  const cols = occupiedColumns(part.placement, placement)
-  const origin = placementOrigin(part.placement, part.h, placement)
+function spanFor(placement: IssuePlacement, part: IssuePart): Span | null {
+  // A placement naming an orientation this part does not offer is the
+  // import warning's problem, the same as a placement naming a part that
+  // left the catalog.
+  const oriented = part.orientations[placement.orientation]
+  if (!oriented) return null
+
+  const cols = occupiedColumns(oriented.rule, placement)
+  const origin = placementOrigin(oriented.rule, part.h, placement)
   return {
     placement,
     part,
+    oriented,
     cols,
     minCol: Math.min(...cols),
     maxCol: Math.max(...cols),
     zMin: origin.z,
-    zMax: origin.z + part.sizeMm.z,
+    zMax: origin.z + oriented.sizeMm.z,
   }
 }
 
@@ -117,7 +138,9 @@ export function findIssues(
     const part = parts.get(placement.partId)
     // A placement whose part left the catalog is the import warning's
     // problem, not this panel's.
-    if (part) spans.push(spanFor(placement, part))
+    if (!part) continue
+    const span = spanFor(placement, part)
+    if (span) spans.push(span)
   }
 
   const issues: Issue[] = []
@@ -159,8 +182,8 @@ export function findIssues(
         a.placement.row === b.placement.row &&
         adjacent(a, b) &&
         a.part.role !== b.part.role &&
-        a.part.placement.matesByHeight &&
-        b.part.placement.matesByHeight &&
+        a.oriented.rule.matesByHeight &&
+        b.oriented.rule.matesByHeight &&
         a.part.h !== null &&
         b.part.h !== null &&
         a.part.h !== b.part.h
@@ -202,6 +225,43 @@ export function findIssues(
     })
   }
 
+  // A shelf is carried by the arm of the sidepiece beside it, and an arm has
+  // exactly one pocket per inch it projects. Reach further than that and the
+  // last ribs have nothing under them — which is easy to do by accident and
+  // impossible to see in a render, since the planner draws the shelf where it
+  // would sit if the bracket were long enough.
+  //
+  // Compared by measured reach rather than by grid units, so it holds for the
+  // fractional-width U brackets too, and names no family.
+  for (const shelf of spans) {
+    if (shelf.placement.orientation !== 'shelf') continue
+
+    const neighbours = spans.filter(
+      (other) =>
+        other !== shelf &&
+        other.part.role === 'sidepiece' &&
+        other.placement.row === shelf.placement.row &&
+        adjacent(shelf, other),
+    )
+    if (neighbours.length === 0) continue
+
+    // The deepest neighbour is the one that decides: a shelf held at one end
+    // by a bracket long enough is a different problem from one held by none.
+    const deepest = Math.max(...neighbours.map((n) => -n.oriented.rule.frontFaceYMm))
+    const reach = -shelf.oriented.rule.frontFaceYMm
+    if (reach <= deepest + TOUCH_TOLERANCE_MM) continue
+
+    const held = neighbours.find((n) => -n.oriented.rule.frontFaceYMm === deepest)!
+    issues.push({
+      id: issueId('unsupported-shelf', [shelf.placement.id, held.placement.id]),
+      kind: 'unsupported-shelf',
+      message: `${shelf.part.name} projects ${Math.round(reach)} mm as a shelf but ${held.part.name} only reaches ${Math.round(deepest)} mm`,
+      detail:
+        'A shelf drops one rib into each pocket along a sidepiece’s arm, and an arm has one pocket per inch it projects. The ribs past the end of the arm have nothing holding them.',
+      placementIds: [shelf.placement.id, held.placement.id],
+    })
+  }
+
   return issues
 }
 
@@ -212,6 +272,7 @@ export function countByKind(issues: readonly Issue[]): Record<IssueKind, number>
     'height-mismatch': 0,
     unmounted: 0,
     unsupported: 0,
+    'unsupported-shelf': 0,
   }
   for (const issue of issues) counts[issue.kind] += 1
   return counts

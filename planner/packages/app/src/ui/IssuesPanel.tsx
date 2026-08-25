@@ -7,6 +7,7 @@ const LABEL: Record<IssueKind, string> = {
   'height-mismatch': 'Mismatch',
   unmounted: 'Unmounted',
   unsupported: 'Horizontal',
+  'unsupported-shelf': 'Unsupported',
 }
 
 /**
@@ -36,8 +37,7 @@ export function IssuesPanel() {
           role: p.role,
           supported: p.supported,
           ...(p.unsupportedReason ? { unsupportedReason: p.unsupportedReason } : {}),
-          placement: p.placement,
-          sizeMm: p.sizeMm,
+          orientations: p.orientations,
         },
       ]),
     )

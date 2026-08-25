@@ -10,7 +10,7 @@ import {
   slotColumnCount,
   slotRowCount,
 } from '@ddd-planner/core'
-import { type CatalogFile, partById, useStore } from '../store'
+import { type CatalogFile, orientationsOf, orientedFor, partById, useStore } from '../store'
 import { useModifier } from '../useModifier'
 
 /**
@@ -135,7 +135,7 @@ export function DragGhost() {
 
   const landing =
     dragging.kind === 'part'
-      ? [{ partId: dragging.partId, ...hoverSlot }]
+      ? [{ partId: dragging.partId, ...hoverSlot, orientation: undefined }]
       : ghostLanding(assemblies, catalog, board, dragging.assemblyId, hoverSlot)
 
   return (
@@ -143,8 +143,11 @@ export function DragGhost() {
       {landing.map((slot, i) => {
         const part = partById(catalog, slot.partId)
         if (!part) return null
-        const origin = placementOrigin(part.placement, part.h, slot)
-        const { x, y, z } = part.sizeMm
+        // A part dropped without an orientation lands in whichever one it
+        // offers first, so the ghost has to resolve it the same way.
+        const oriented = orientedFor(part, slot.orientation ?? orientationsOf(part)[0] ?? 'flat')
+        const origin = placementOrigin(oriented.rule, part.h, slot)
+        const { x, y, z } = oriented.sizeMm
         return (
           <mesh key={i} position={[origin.x + x / 2, origin.y + y / 2, origin.z + z / 2]}>
             <boxGeometry args={[x, y, z]} />
@@ -175,7 +178,10 @@ function ghostLanding(
     landed.map((p) => ({
       col: p.col,
       row: p.row,
-      spanCols: partById(catalog, p.partId)?.placement.occupiesColumns ?? 1,
+      spanCols:
+        partById(catalog, p.partId) === null
+          ? 1
+          : orientedFor(partById(catalog, p.partId)!, p.orientation).rule.occupiesColumns,
     })),
     { dCol: 0, dRow: 0 },
     { cols: slotColumnCount(board), rows: slotRowCount(board) },

@@ -449,31 +449,34 @@ describe('the arm socket, re-derived from the meshes', () => {
     }
   })
 
-  it('finds the same rib lattice on every family declared to seat in it', () => {
-    const seating = (DATA.families as Record<string, any>[]).filter(
-      (f) => f.anchor?.seatsInArmSocket !== undefined,
-    )
-    expect(seating.length).toBeGreaterThanOrEqual(1)
+  it('finds the same band lattice on every family declared to seat in it', () => {
+    const seating = (DATA.families as Record<string, any>[]).filter((f) => f.shelf !== undefined)
+    expect(seating.length).toBeGreaterThanOrEqual(6)
 
     for (const family of seating) {
-      const { bandFloorMm, bandFirstOffsetMm } = family.anchor.seatsInArmSocket
+      const { bandFloorMm, bandFirstOffsetMm } = family.shelf
+      // Needs at least three bands for the pitch to mean anything, and the
+      // first part alphabetically is a 1x1 with one.
       const parts = partsIn(family)
-      const { name } = parts[0]!
+      const { name } = parts.find((x) => (x.parsed.h ?? 0) >= 3) ?? parts[0]!
       const { tris, size } = recentred(family.dir, name)
 
-      // Probe just in from the width edge, inside the band's own thickness.
-      const bands = runs(
-        (t) => solidAt(tris, 1.5, t, bandFloorMm + 1.5),
-        size.y,
-      ).filter(([, , s]) => s)
+      // Probe at the very edge, inside the band's own thickness. A ribbed
+      // family answers with solid bands there and a pinned one with notches —
+      // the same lattice either way, which is the point: a 4x10x8 mm pin
+      // fills a notch exactly where a rib would have been.
+      const along = runs((t) => solidAt(tris, 1.0, t, bandFloorMm + 1.5), size.y)
+      const solids = along.filter(([a, b, s]) => s && b - a > 8 && b - a < 12)
+      const gaps = along.filter(([a, b, s]) => !s && b - a > 8 && b - a < 12)
+      const bands = solids.length >= 2 ? solids : gaps
 
-      expect(bands.length, `${family.id}: no rib lattice`).toBeGreaterThanOrEqual(2)
+      expect(bands.length, `${family.id}: no band lattice`).toBeGreaterThanOrEqual(2)
       near(bands[0]![0], bandFirstOffsetMm, `${family.id} first band`)
       for (let i = 1; i < bands.length; i++)
         near(bands[i]![0] - bands[i - 1]![0], SOCKET.pitchMm, `${family.id} pitch`)
-      // A rib is 9.8 long against a 10.0 pocket: 0.1 mm of clearance a side.
-      for (const [a, b] of bands)
-        near(b - a, SOCKET.pocketLengthMm - 0.2, `${family.id} band length`)
+      // A rib is 9.8 in a 10.0 pocket; a notch is the pocket's own 10.0.
+      const expected = solids.length >= 2 ? SOCKET.pocketLengthMm - 0.2 : SOCKET.pocketLengthMm
+      for (const [a, b] of bands) near(b - a, expected, `${family.id} band length`)
     }
   })
 })

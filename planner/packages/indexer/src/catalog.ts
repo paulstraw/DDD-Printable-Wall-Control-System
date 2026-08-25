@@ -9,6 +9,7 @@
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Orientation, OrientedPlacement } from '@ddd-planner/core'
 import {
   type AxisMap,
   type Bounds,
@@ -63,11 +64,16 @@ export interface PartRow {
   model: string
   thumb: string
   fasteners: { id: string; quantity: number }[]
+  /** Overrides for orientations where those fasteners do not apply. */
+  fastenersByOrientation?: Partial<Record<Orientation, { id: string; quantity: number }[]>>
   /** False when the planner cannot position this part meaningfully. */
   supported: boolean
   unsupportedReason?: string
-  /** Resolved from the family rules so the app never reads families.json. */
-  placement: PlacementRule
+  /**
+   * Every way this part can be mounted, resolved from the family rules so
+   * the app never reads families.json. Almost every part has one entry.
+   */
+  orientations: Partial<Record<Orientation, OrientedPlacement>>
 }
 
 /**
@@ -83,11 +89,9 @@ function placementFor(
   family: Record<string, unknown>,
   parsed: { h: number | null; w: number | null; variant: string | null },
   placed: { widthMm: number; depthMm: number },
-  armSocket: ArmSocket,
 ): PlacementRule {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rule = family as any
-  const bottomBelowSlotCenterMm = rule.anchor.bottomBelowSlotCenterMm
 
   if (family.kind === 'sidepiece') {
     const half = rule.anchor.tang.widthMm / 2
@@ -99,31 +103,84 @@ function placementFor(
       offsetFromSlotXMm: extends_ === '+x' ? -half : half - placed.widthMm,
       // How far it projects is its own business; the tang depth is shared.
       frontFaceYMm: -(placed.depthMm - rule.anchor.tang.depthMm),
-      bottomBelowSlotCenterMm,
+      bottomBelowSlotCenterMm: rule.anchor.bottomBelowSlotCenterMm,
       matesByHeight: true,
     }
   }
 
-  const columns = Math.max(1, Math.round(parsed.w ?? 1))
-  const depth = rule.anchor.depth
-  const shelf = rule.anchor.seatsInArmSocket as
-    | { bandFloorMm: number; bandFirstOffsetMm: number }
-    | undefined
-
   return {
-    occupiesColumns: columns,
-    offsetFromSlotXMm: (COLUMN_PITCH_MM * columns - placed.widthMm) / 2,
-    // A family rotated out of the wall plane has no single depth to declare,
-    // because what used to be its height is now how far it projects. Those
-    // measure it; everything flat shares the mounting interface constant.
-    frontFaceYMm: depth.fromMeasuredDepth
-      ? backEdgeY(shelf, armSocket) - placed.depthMm
-      : depth.frontFaceYMm,
-    bottomBelowSlotCenterMm: shelf
-      ? seatedInArmSocket(shelf, armSocket)
-      : bottomBelowSlotCenterMm,
-    matesByHeight: rule.matesByHeight ?? true,
+    occupiesColumns: columnsFor(parsed),
+    offsetFromSlotXMm: offsetFor(parsed, placed.widthMm),
+    frontFaceYMm: rule.anchor.depth.frontFaceYMm,
+    bottomBelowSlotCenterMm: rule.anchor.bottomBelowSlotCenterMm,
+    matesByHeight: true,
   }
+}
+
+const columnsFor = (parsed: { w: number | null }) => Math.max(1, Math.round(parsed.w ?? 1))
+
+const offsetFor = (parsed: { w: number | null }, widthMm: number) =>
+  (COLUMN_PITCH_MM * columnsFor(parsed) - widthMm) / 2
+
+interface ShelfSpec {
+  readonly bandFloorMm: number
+  readonly bandFirstOffsetMm: number
+}
+
+/**
+ * Every way a part can be mounted, in the order the family declares them.
+ *
+ * A family says nothing and gets `flat`, which is what almost all of them
+ * are. The flat-plate centerpieces say `["flat", "shelf"]` because the same
+ * plate genuinely does both and only the person building the wall knows
+ * which. Gridfinity says `["shelf"]` alone.
+ */
+function orientationsFor(
+  family: Record<string, unknown>,
+  parsed: { h: number | null; w: number | null; variant: string | null },
+  placed: { widthMm: number; depthMm: number; heightMm: number },
+  armSocket: ArmSocket,
+): Partial<Record<Orientation, OrientedPlacement>> {
+  const declared = (family.orientations as Orientation[] | undefined) ?? ['flat']
+  const measured = { x: placed.widthMm, y: placed.depthMm, z: placed.heightMm }
+  const out: Partial<Record<Orientation, OrientedPlacement>> = {}
+
+  if (declared.includes('flat')) {
+    out.flat = {
+      rule: placementFor(family, parsed, placed),
+      sizeMm: measured,
+      rotateXDeg: 0,
+    }
+  }
+
+  if (declared.includes('shelf')) {
+    // A family that is *only* a shelf ships its asset already turned, by its
+    // own printToWall map, so its measured bounds are the shelf's and there
+    // is no rotation left for the app to apply. One that is both ships flat
+    // and gets turned at draw time.
+    const alreadyTurned = !declared.includes('flat')
+    const shelf = (family as { shelf?: ShelfSpec }).shelf
+    if (!shelf) throw new Error(`family ${String(family.id)} offers a shelf but declares no lattice`)
+
+    const reachMm = alreadyTurned ? placed.depthMm : placed.heightMm
+    out.shelf = {
+      rule: {
+        occupiesColumns: columnsFor(parsed),
+        offsetFromSlotXMm: offsetFor(parsed, placed.widthMm),
+        // Measured, never declared: a shelf reaches out by what used to be
+        // its height, and no family has one number for that.
+        frontFaceYMm: backEdgeY(shelf, armSocket) - reachMm,
+        bottomBelowSlotCenterMm: seatedInArmSocket(shelf, armSocket),
+        // `h` has stopped meaning height, so comparing it to a neighbour's
+        // would warn about the wrong thing in both directions.
+        matesByHeight: false,
+      },
+      sizeMm: alreadyTurned ? measured : { x: placed.widthMm, y: placed.heightMm, z: placed.depthMm },
+      rotateXDeg: alreadyTurned ? 0 : -90,
+    }
+  }
+
+  return out
 }
 
 /** The shared arm-socket lattice, read from families.json's top level. */
@@ -142,11 +199,7 @@ export interface ArmSocket {
  * edge, so seating one in the other leaves the back edge standing 7.8 mm
  * proud of the panel. Anything else draws the rib outside the pocket.
  */
-function backEdgeY(
-  shelf: { bandFirstOffsetMm: number } | undefined,
-  socket: ArmSocket,
-): number {
-  if (!shelf) return 0
+function backEdgeY(shelf: { bandFirstOffsetMm: number }, socket: ArmSocket): number {
   return -(socket.firstPocketOutFromTangMm - shelf.bandFirstOffsetMm - socket.tangDepthMm)
 }
 
@@ -196,13 +249,54 @@ function unsupportedReasonFor(rules: readonly UnsupportedRule[], name: string): 
  * A family's fasteners, plus any that apply only to some of its parts. A
  * standard retainer needs nothing; the locking variants take a pin.
  */
-function fastenersFor(family: Record<string, unknown>, name: string): { id: string; quantity: number }[] {
-  const base = (family.fasteners as { id: string; quantity: number }[]) ?? []
-  const rules =
-    (family.fastenerRules as { match: string; fasteners: { id: string; quantity: number }[] }[]) ?? []
+type Needs = { id: string; quantity: number }[]
+type ByOrientation = Partial<Record<Orientation, Needs>>
+
+interface FastenerRule {
+  match: string
+  fasteners: Needs
+  fastenersByOrientation?: ByOrientation
+}
+
+function matchingRules(family: Record<string, unknown>, name: string): FastenerRule[] {
+  const rules = (family.fastenerRules as FastenerRule[]) ?? []
   const haystack = name.toLowerCase()
-  const extra = rules.filter((r) => haystack.includes(r.match.toLowerCase())).flatMap((r) => r.fasteners)
-  return [...base, ...extra]
+  return rules.filter((r) => haystack.includes(r.match.toLowerCase()))
+}
+
+function fastenersFor(family: Record<string, unknown>, name: string): Needs {
+  const base = (family.fasteners as Needs) ?? []
+  return [...base, ...matchingRules(family, name).flatMap((r) => r.fasteners)]
+}
+
+/**
+ * Fasteners for the orientations where the default does not hold.
+ *
+ * A locking spacer's 8 mm pin passes through the plate and into a hole in
+ * the panel. Turn the plate into a shelf and the pin points at the ceiling,
+ * so it is not something to print. Built by resolving the whole list per
+ * orientation rather than by patching the default, so a family and a
+ * per-part rule can each have their own answer without the two disagreeing.
+ */
+function fastenersByOrientationFor(
+  family: Record<string, unknown>,
+  name: string,
+  orientations: readonly Orientation[],
+): ByOrientation | undefined {
+  const familyOverrides = (family.fastenersByOrientation as ByOrientation | undefined) ?? {}
+  const rules = matchingRules(family, name)
+  const relevant = orientations.filter(
+    (o) => familyOverrides[o] !== undefined || rules.some((r) => r.fastenersByOrientation?.[o]),
+  )
+  if (relevant.length === 0) return undefined
+
+  const out: ByOrientation = {}
+  for (const o of relevant) {
+    const base = familyOverrides[o] ?? ((family.fasteners as Needs) ?? [])
+    const extra = rules.flatMap((r) => r.fastenersByOrientation?.[o] ?? r.fasteners)
+    out[o] = [...base, ...extra]
+  }
+  return out
 }
 
 function mapFor(family: Record<string, unknown>, variant: string | null): AxisMap {
@@ -320,6 +414,18 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const size = placed.bounds
       const widthMm = size.max.x - size.min.x
       const depthMm = size.max.y - size.min.y
+      const heightMm = size.max.z - size.min.z
+      const orientations = orientationsFor(
+        family,
+        parsed,
+        { widthMm, depthMm, heightMm },
+        armSocket,
+      )
+      const byOrientation = fastenersByOrientationFor(
+        family,
+        parsed.filename,
+        Object.keys(orientations) as Orientation[],
+      )
       parts.push({
         id,
         family: family.id as string,
@@ -349,7 +455,8 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
         ...(unsupportedReasonFor(unsupportedRules, parsed.filename) !== undefined
           ? { unsupportedReason: unsupportedReasonFor(unsupportedRules, parsed.filename) }
           : {}),
-        placement: placementFor(family, parsed, { widthMm, depthMm }, armSocket),
+        orientations,
+        ...(byOrientation ? { fastenersByOrientation: byOrientation } : {}),
       })
     }
   }

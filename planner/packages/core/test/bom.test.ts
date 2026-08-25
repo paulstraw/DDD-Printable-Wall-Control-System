@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Orientation } from '../src/placement'
 import {
   type BomFastener,
   type BomPart,
@@ -29,8 +30,8 @@ const FASTENERS: Record<string, BomFastener> = {
   '4x10x8mm Pin': { id: '4x10x8mm Pin', file: 'Accessories/4x10x8mm Pin.stl', volumeMm3: 240 },
 }
 
-const place = (partId: string, times: number) =>
-  Array.from({ length: times }, () => ({ partId }))
+const place = (partId: string, times: number, orientation: Orientation = 'flat') =>
+  Array.from({ length: times }, () => ({ partId, orientation }))
 
 describe('filamentGrams', () => {
   it('converts a cubic centimetre at the density of PLA', () => {
@@ -57,7 +58,46 @@ describe('filamentGrams', () => {
   })
 })
 
+const LOCKING: BomPart = {
+  id: 'locking',
+  name: '3x3 Locking Spacer',
+  file: 'Centerpieces/Locking_spacer/3x3 Locking Spacer.stl',
+  volumeMm3: 20_000,
+  fasteners: [{ id: '8mm Lock Pin', quantity: 1 }],
+  // Rotated to a shelf the pin no longer reaches the panel, so it is not
+  // something to print.
+  fastenersByOrientation: { shelf: [] },
+}
+
 describe('buildBom', () => {
+  it('drops a fastener that the orientation makes useless', () => {
+    const flat = buildBom({
+      placements: place('locking', 2),
+      parts: [LOCKING],
+      fasteners: FASTENERS,
+    })
+    expect(flat.fasteners.find((f) => f.id === '8mm Lock Pin')?.quantity).toBe(2)
+
+    const shelf = buildBom({
+      placements: place('locking', 2, 'shelf'),
+      parts: [LOCKING],
+      fasteners: FASTENERS,
+    })
+    expect(shelf.fasteners).toEqual([])
+    // The part itself is still printed, and still twice.
+    expect(shelf.parts[0]?.quantity).toBe(2)
+  })
+
+  it('counts each orientation on its own terms when both are on the wall', () => {
+    const bom = buildBom({
+      placements: [...place('locking', 3), ...place('locking', 2, 'shelf')],
+      parts: [LOCKING],
+      fasteners: FASTENERS,
+    })
+    expect(bom.parts[0]?.quantity).toBe(5)
+    expect(bom.fasteners.find((f) => f.id === '8mm Lock Pin')?.quantity).toBe(3)
+  })
+
   it('aggregates repeats into one line with a quantity', () => {
     const bom = buildBom({
       placements: place('flat-left', 3),
@@ -132,7 +172,7 @@ describe('buildBom', () => {
 
   it('ignores a placement whose part has left the catalog', () => {
     const bom = buildBom({
-      placements: [{ partId: 'gone' }, ...place('flat-left', 1)],
+      placements: [{ partId: 'gone', orientation: 'flat' as const }, ...place('flat-left', 1)],
       parts: [FLAT_LEFT],
       fasteners: FASTENERS,
     })

@@ -8,9 +8,17 @@
  * Fasteners are derived, never placed. A clip-on spacer needs four pins
  * because its family says so, and the count follows the number of clip-ons on
  * the wall — there is nothing for the user to remember.
+ *
+ * Which fasteners a part needs can depend on how it is mounted. A locking
+ * spacer's 8 mm pin passes through the plate and into a hole in the panel;
+ * lay the same plate flat as a shelf and the pin points at the ceiling and
+ * reaches nothing. Billing for it anyway would put a part in the print list
+ * that cannot do its job.
  */
 
 /** Density of PLA. The library is printed in whatever you like, but this is the common case. */
+import type { Orientation } from './placement'
+
 export const PLA_DENSITY_G_PER_CM3 = 1.24
 
 const MM3_PER_CM3 = 1000
@@ -32,13 +40,32 @@ export function filamentGrams(volumeMm3: number, options: FilamentOptions = {}):
   return (volumeMm3 / MM3_PER_CM3) * density * solidity
 }
 
+export interface FastenerNeed {
+  readonly id: string
+  readonly quantity: number
+}
+
 /** What the BOM needs to know about a catalog part. */
 export interface BomPart {
   readonly id: string
   readonly name: string
   readonly file: string
   readonly volumeMm3: number
-  readonly fasteners: readonly { readonly id: string; readonly quantity: number }[]
+  /** What it needs mounted the usual way. */
+  readonly fasteners: readonly FastenerNeed[]
+  /**
+   * Overrides for orientations the default does not describe. Absent for
+   * almost every part, because almost every fastener does the same job
+   * whichever way round the part goes.
+   */
+  readonly fastenersByOrientation?: Readonly<
+    Partial<Record<Orientation, readonly FastenerNeed[]>>
+  >
+}
+
+/** What a part needs, mounted this way. */
+export function fastenersFor(part: BomPart, orientation: Orientation): readonly FastenerNeed[] {
+  return part.fastenersByOrientation?.[orientation] ?? part.fasteners
 }
 
 /** What it needs to know about a fastener the families call for. */
@@ -68,7 +95,10 @@ export interface Bom {
 }
 
 export interface BuildBomInput {
-  readonly placements: readonly { readonly partId: string }[]
+  readonly placements: readonly {
+    readonly partId: string
+    readonly orientation: Orientation
+  }[]
   readonly parts: readonly BomPart[]
   readonly fasteners: Readonly<Record<string, BomFastener>>
 }
@@ -99,7 +129,7 @@ export function buildBom(input: BuildBomInput, options: FilamentOptions = {}): B
     if (!part) continue
 
     partCounts.set(part.id, (partCounts.get(part.id) ?? 0) + 1)
-    for (const need of part.fasteners) {
+    for (const need of fastenersFor(part, placement.orientation)) {
       fastenerCounts.set(need.id, (fastenerCounts.get(need.id) ?? 0) + need.quantity)
     }
   }

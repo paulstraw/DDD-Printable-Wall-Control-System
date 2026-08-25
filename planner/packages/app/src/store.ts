@@ -3,7 +3,8 @@ import {
   type Assembly,
   type Board,
   type Point2,
-  type PlacementRule,
+  type Orientation,
+  type OrientedPlacement,
   type SelectMode,
   absoluteParts,
   applySelection,
@@ -42,9 +43,30 @@ export interface CatalogPart {
   model: string
   thumb: string
   fasteners: { id: string; quantity: number }[]
+  fastenersByOrientation?: Partial<Record<Orientation, { id: string; quantity: number }[]>>
   supported: boolean
   unsupportedReason?: string
-  placement: PlacementRule
+  /** Every way this part can be mounted. Almost every part has one entry. */
+  orientations: Partial<Record<Orientation, OrientedPlacement>>
+}
+
+/**
+ * How a part is mounted, when the catalog offers a choice.
+ *
+ * Falls back to whichever single orientation the part has, so a caller never
+ * has to ask whether this part is one of the ones that can be turned.
+ */
+export function orientedFor(part: CatalogPart, orientation: Orientation): OrientedPlacement {
+  return (
+    part.orientations[orientation] ??
+    part.orientations.flat ??
+    (part.orientations.shelf as OrientedPlacement)
+  )
+}
+
+/** The orientations a part offers, in a stable order. */
+export function orientationsOf(part: CatalogPart): Orientation[] {
+  return (['flat', 'shelf'] as const).filter((o) => part.orientations[o] !== undefined)
 }
 
 export interface CatalogFile {
@@ -60,6 +82,14 @@ export interface Placement {
   readonly partId: string
   readonly col: number
   readonly row: number
+  /**
+   * Which way this one is mounted.
+   *
+   * On the placement rather than the part, because the same spacer blank is
+   * legitimately a wall plate here and a shelf there, and only the person
+   * building the wall knows which.
+   */
+  readonly orientation: Orientation
 }
 
 interface State {
@@ -111,7 +141,19 @@ interface State {
   dragMoved: boolean
 
   /** Add parts at given slots and select them. Used by a drop and by the example. */
-  addPlacements: (refs: readonly { partId: string; col: number; row: number }[]) => void
+  addPlacements: (
+    refs: readonly { partId: string; col: number; row: number; orientation?: Orientation }[],
+  ) => void
+
+  /**
+   * Turn every part in the selection that can be turned.
+   *
+   * Acts on the whole selection, the way nudge and delete do — a selection of
+   * one is not a special case. Parts that offer only one orientation are left
+   * alone rather than refusing the whole gesture, so selecting a joint and
+   * pressing R turns the spacer and leaves the brackets where they are.
+   */
+  setOrientation: (orientation: Orientation) => void
 
   beginPartDrag: (partId: string) => void
   beginAssemblyDrag: (assemblyId: string) => void
@@ -179,7 +221,7 @@ function assemblyLanding(
     landed.map((p) => ({
       col: p.col,
       row: p.row,
-      spanCols: partById(state.catalog, p.partId)?.placement.occupiesColumns ?? 1,
+      spanCols: spanColsOf(state.catalog, p.partId, p.orientation),
     })),
     { dCol: 0, dRow: 0 },
     { cols: slotColumnCount(state.board), rows: slotRowCount(state.board) },
@@ -194,8 +236,9 @@ function footprints(state: Pick<State, 'placements' | 'catalog'>) {
   for (const placement of state.placements) {
     const part = partById(state.catalog, placement.partId)
     if (!part) continue
-    const origin = placementOrigin(part.placement, part.h, placement)
-    out.push({ id: placement.id, rect: footprintRect(origin, part.sizeMm) })
+    const oriented = orientedFor(part, placement.orientation)
+    const origin = placementOrigin(oriented.rule, part.h, placement)
+    out.push({ id: placement.id, rect: footprintRect(origin, oriented.sizeMm) })
   }
   return out
 }
@@ -281,13 +324,42 @@ export const useStore = create<State>((set, get) => ({
 
   addPlacements: (refs) => {
     if (refs.length === 0) return
-    const added: Placement[] = refs.map((p) => ({ id: `p${nextId++}`, ...p }))
+    const catalog = get().catalog
+    const added: Placement[] = refs.map((ref) => {
+      const part = partById(catalog, ref.partId)
+      // A part with no flat orientation — a Gridfinity frame — is placed as
+      // the only thing it can be, without the caller having to know that.
+      const fallback = part ? (orientationsOf(part)[0] ?? 'flat') : 'flat'
+      return {
+        id: `p${nextId++}`,
+        partId: ref.partId,
+        col: ref.col,
+        row: ref.row,
+        orientation: ref.orientation ?? fallback,
+      }
+    })
     set((s) => ({
       placements: [...s.placements, ...added],
       // Newly placed parts arrive selected, so they can be nudged straight
       // away and so the catalog ranks itself around them.
       selectedIds: added.map((p) => p.id),
     }))
+  },
+
+  setOrientation: (orientation) => {
+    const { catalog, placements, selectedIds } = get()
+    if (selectedIds.length === 0) return
+
+    let changed = false
+    const next = placements.map((placement) => {
+      if (!selectedIds.includes(placement.id)) return placement
+      if (placement.orientation === orientation) return placement
+      const part = partById(catalog, placement.partId)
+      if (!part || part.orientations[orientation] === undefined) return placement
+      changed = true
+      return { ...placement, orientation }
+    })
+    if (changed) set({ placements: next })
   },
 
   deleteAssembly: (id) =>
@@ -376,7 +448,7 @@ export const useStore = create<State>((set, get) => ({
     const items = selected.map((p) => ({
       col: p.col,
       row: p.row,
-      spanCols: partById(catalog, p.partId)?.placement.occupiesColumns ?? 1,
+      spanCols: spanColsOf(catalog, p.partId, p.orientation),
     }))
 
     // The whole selection moves as one body, or not at all — see
@@ -409,7 +481,12 @@ export const useStore = create<State>((set, get) => ({
       heightIn,
       // Placement ids are this session's own bookkeeping; a saved wall is
       // just parts at slots.
-      placements: placements.map((p) => ({ partId: p.partId, col: p.col, row: p.row })),
+      placements: placements.map((p) => ({
+        partId: p.partId,
+        col: p.col,
+        row: p.row,
+        orientation: p.orientation,
+      })),
       assemblies,
     }
   },
@@ -431,6 +508,16 @@ export const useStore = create<State>((set, get) => ({
 
   clear: () => set({ placements: [], selectedIds: [], marquee: null }),
 }))
+
+/** Column span, which the turn does not change — it is about the wall X axis. */
+function spanColsOf(
+  catalog: CatalogFile | null,
+  partId: string,
+  orientation: Orientation,
+): number {
+  const part = partById(catalog, partId)
+  return part ? orientedFor(part, orientation).rule.occupiesColumns : 1
+}
 
 export function partById(catalog: CatalogFile | null, id: string | null): CatalogPart | null {
   if (!catalog || !id) return null

@@ -8,6 +8,7 @@ import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
 import { EmptyState } from './ui/EmptyState'
 import { IssuesPanel } from './ui/IssuesPanel'
+import { OrientationToggle } from './ui/OrientationToggle'
 import { SaveAssembly } from './ui/SaveAssembly'
 import { WallActions } from './ui/WallActions'
 import { WallSizeControls } from './ui/WallSizeControls'
@@ -61,11 +62,13 @@ export function App() {
                 <span className="warn-note"> · for a horizontal panel — position is not meaningful</span>
               ) : null}{' '}
               · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
+              <OrientationToggle />
             </>
           ) : selectedIds.length > 1 ? (
             <>
               <strong>{selectedIds.length} selected</strong> · <kbd>←→↑↓</kbd> move together ·{' '}
               <kbd>Del</kbd> remove
+              <OrientationToggle />
             </>
           ) : (
             <>
