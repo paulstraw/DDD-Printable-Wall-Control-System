@@ -32,14 +32,18 @@ export function EmptyState() {
     const cols = slotColumnCount(board)
     const rows = slotRowCount(board)
     // Roughly centred, and never off a board too small to hold it.
-    const col = Math.max(0, Math.min(Math.floor(cols / 2) - 2, cols - 5))
+    const col = Math.max(0, Math.min(Math.floor(cols / 2) - 2, cols - 4))
     const row = Math.max(0, Math.floor(rows / 2))
     const [left, centre, right] = parts
     if (!left || !centre || !right) return
+    // The plate is anchored on the same column as the Flat Left: the
+    // bracket's body fills the bay to the left of that column and the plate
+    // starts on it. The Flat Right goes on the column the plate's far edge
+    // lands on, three along. See `occupiedBays`.
     addPlacements([
       { partId: left.id, col, row },
-      { partId: centre.id, col: col + 1, row },
-      { partId: right.id, col: col + 4, row },
+      { partId: centre.id, col, row },
+      { partId: right.id, col: col + 3, row },
     ])
   }
 

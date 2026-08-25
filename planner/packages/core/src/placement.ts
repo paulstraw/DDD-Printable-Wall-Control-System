@@ -10,11 +10,15 @@
  * more — this returns exactly that translation.
  */
 
-import { slotColumnX, slotRowCenterZ } from './grid'
+import { COLUMN_PITCH_MM, slotColumnX, slotRowCenterZ } from './grid'
 import type { Vec3 } from './transforms'
 
 export interface PlacementRule {
-  /** Slot columns the part occupies: 1 for a sidepiece, w for a centerpiece. */
+  /**
+   * How wide the part's mounting run is in grid columns: 1 for a sidepiece,
+   * w for a centerpiece. Where that run lands is `occupiedBays`' business —
+   * a sidepiece stands beside its slot column, not on it.
+   */
   readonly occupiesColumns: number
   /** Added to the anchor slot's X to get the part's minimum corner. */
   readonly offsetFromSlotXMm: number
@@ -108,9 +112,32 @@ export function placementOrigin(
   }
 }
 
-/** The slot columns a placed part covers, for overlap checks and nudging. */
-export function occupiedColumns(rule: PlacementRule, slot: SlotRef): number[] {
-  const out: number[] = []
-  for (let i = 0; i < Math.max(1, Math.round(rule.occupiesColumns)); i++) out.push(slot.col + i)
-  return out
+/**
+ * The run of wall a placed part's body fills, measured in bays.
+ *
+ * A bay is the 25.4 mm between one slot column and the next, and it is the
+ * honest unit for "who is standing where". Slot columns are not: nothing in
+ * this system fills a slot column, because a slot column is where parts
+ * *join*. A centerpiece's plate runs from the column it is anchored on to
+ * the one `occupiesColumns` along, with only its 2.7 mm tabs reaching over
+ * either line; the sidepiece at each end puts its body beside that line
+ * rather than on it — a Left variant to the -x side, a Right variant to the
+ * +x. Counted in columns instead, the joint the whole system is built around
+ * reads as a collision at one end and a gap at the other.
+ *
+ * The run is `occupiesColumns` bays wide and sits where the body actually
+ * is: rounding the body's centre onto the bay lattice is what picks the
+ * side, which keeps this right for a Center sidepiece — two bodies' worth of
+ * thickness, all of it on one side of its slot — without naming a variant.
+ */
+export function occupiedBays(
+  placement: OrientedPlacement,
+  slot: SlotRef,
+): { readonly first: number; readonly last: number } {
+  const width = Math.max(1, Math.round(placement.rule.occupiesColumns))
+  const bodyCentreMm = placement.rule.offsetFromSlotXMm + placement.sizeMm.x / 2
+  const first =
+    slot.col +
+    Math.round((bodyCentreMm - (width * COLUMN_PITCH_MM) / 2) / COLUMN_PITCH_MM)
+  return { first, last: first + width - 1 }
 }

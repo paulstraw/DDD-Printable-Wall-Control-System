@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { slotColumnX, slotRowCenterZ } from '../src/grid'
 import {
+  type OrientedPlacement,
   type PlacementRule,
   bottomOffsetFor,
-  occupiedColumns,
+  occupiedBays,
   placementOrigin,
 } from '../src/placement'
 
@@ -69,17 +70,64 @@ describe('parity', () => {
   })
 })
 
-describe('occupiedColumns', () => {
-  it('gives one column to a sidepiece', () => {
-    expect(occupiedColumns(FLAT_LEFT, { col: 5, row: 0 })).toEqual([5])
+/** As the indexer bakes one: a rule plus the extents it applies to. */
+function oriented(rule: PlacementRule, sizeXMm: number): OrientedPlacement {
+  return { rule, sizeMm: { x: sizeXMm, y: 18.7, z: 85.7 }, rotateXDeg: 0 }
+}
+
+describe('occupiedBays', () => {
+  it('puts a Left sidepiece in the bay to the left of its slot', () => {
+    expect(occupiedBays(oriented(FLAT_LEFT, 13.7), { col: 5, row: 0 })).toEqual({
+      first: 4,
+      last: 4,
+    })
   })
 
-  it('gives a centerpiece the span it covers', () => {
-    expect(occupiedColumns(BLANK_3, { col: 5, row: 0 })).toEqual([5, 6, 7])
+  it('puts a Right sidepiece in the bay to the right of the same slot', () => {
+    const right = { ...FLAT_LEFT, offsetFromSlotXMm: -1.1 }
+    expect(occupiedBays(oriented(right, 13.7), { col: 5, row: 0 })).toEqual({
+      first: 5,
+      last: 5,
+    })
   })
 
-  it('never returns an empty span', () => {
+  it('gives a Center sidepiece one bay, not the two its thickness spans', () => {
+    // 27.6 mm of body, all of it on the -x side of the slot: it fills the
+    // bay to the left and leans 1.1 mm into each neighbour, which is not
+    // somebody else's space.
+    const centre = { ...FLAT_LEFT, offsetFromSlotXMm: -26.5 }
+    expect(occupiedBays(oriented(centre, 27.6), { col: 5, row: 0 })).toEqual({
+      first: 4,
+      last: 4,
+    })
+  })
+
+  it('runs a centerpiece from its own slot to the one w along', () => {
+    expect(occupiedBays(oriented(BLANK_3, 81.6), { col: 5, row: 0 })).toEqual({
+      first: 5,
+      last: 7,
+    })
+  })
+
+  it('leaves the canonical joint without a shared bay', () => {
+    // Flat Left at 5, the plate anchored on the same column, Flat Right at
+    // the column its far edge lands on: 4 | 5 6 7 | 8, no gaps and no
+    // collisions. This is the arrangement the renderer draws.
+    const left = occupiedBays(oriented(FLAT_LEFT, 13.7), { col: 5, row: 0 })
+    const plate = occupiedBays(oriented(BLANK_3, 81.6), { col: 5, row: 0 })
+    const right = occupiedBays(
+      oriented({ ...FLAT_LEFT, offsetFromSlotXMm: -1.1 }, 13.7),
+      { col: 8, row: 0 },
+    )
+    expect(left.last + 1).toBe(plate.first)
+    expect(plate.last + 1).toBe(right.first)
+  })
+
+  it('never returns an empty run', () => {
     const degenerate = { ...FLAT_LEFT, occupiesColumns: 0 }
-    expect(occupiedColumns(degenerate, { col: 1, row: 0 })).toEqual([1])
+    expect(occupiedBays(oriented(degenerate, 13.7), { col: 1, row: 0 })).toEqual({
+      first: 0,
+      last: 0,
+    })
   })
 })

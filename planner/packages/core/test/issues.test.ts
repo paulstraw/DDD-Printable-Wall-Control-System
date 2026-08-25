@@ -70,7 +70,7 @@ const catalog = new Map<string, IssuePart>([
         bottomBelowSlotCenterMm: { odd: 11.45, even: 36.85 },
         matesByHeight: true,
       },
-      sizeMm: { z: 76 },
+      sizeMm: { x: 81.6, z: 76 },
       // 3 units deep as a shelf, so it needs a bracket reaching 84 mm.
       shelf: asShelf({ frontFaceYMm: -83.8 }, { y: 76, z: 6.15 }),
     }),
@@ -88,7 +88,7 @@ const catalog = new Map<string, IssuePart>([
         bottomBelowSlotCenterMm: { odd: 11.45, even: 36.85 },
         matesByHeight: true,
       },
-      sizeMm: { z: 50.6 },
+      sizeMm: { x: 81.6, z: 50.6 },
     }),
   ],
   [
@@ -104,6 +104,14 @@ const catalog = new Map<string, IssuePart>([
   // A 2x2 L bracket reaches 58.65 mm; a 2x4 reaches 109.45.
   ['bracket-2', part({ name: '2x2 L Bracket Flat Left', h: 2, placement: { ...SIDEPIECE_RULE, frontFaceYMm: -58.65 } })],
   ['bracket-4', part({ name: '2x4 L Bracket Flat Left', h: 2, placement: { ...SIDEPIECE_RULE, frontFaceYMm: -109.45 } })],
+  [
+    'bracket-4-right',
+    part({
+      name: '2x4 L Bracket Flat Right',
+      h: 2,
+      placement: { ...SIDEPIECE_RULE, offsetFromSlotXMm: -1.1, frontFaceYMm: -109.45 },
+    }),
+  ],
 ])
 
 const at = (
@@ -120,11 +128,19 @@ const at = (
   orientation,
 })
 
-/** The joint the whole project is built around: left, centre, right. */
+/**
+ * The joint the whole project is built around: left, centre, right.
+ *
+ * All three name column 6 to 9 the way the parts really sit. The plate is
+ * anchored on the *same* column as the Flat Left beside it — the bracket's
+ * body is in the bay to the left of that column, the plate's plate begins on
+ * it — and the Flat Right stands on the column the plate's far edge lands
+ * on. Anything else leaves a 21.6 mm gap you can see in the render.
+ */
 const goodJoint = [
   at('p1', 'flat-left', 6, 4),
-  at('p2', 'blank-3', 7, 4),
-  at('p3', 'flat-right', 10, 4),
+  at('p2', 'blank-3', 6, 4),
+  at('p3', 'flat-right', 9, 4),
 ]
 
 describe('a correct assembly raises nothing', () => {
@@ -133,9 +149,9 @@ describe('a correct assembly raises nothing', () => {
   })
 
   it('does not mistake interlocking for overlapping', () => {
-    // The tab really does sit inside the socket; only shared slot columns
-    // count as a conflict, which is why this passes without a tolerance
-    // fudge on the X axis.
+    // The tab really does sit inside the socket, and the bracket's body
+    // stands in the bay next door rather than on the column they share, so
+    // there is nothing here to mistake for a collision.
     const issues = findIssues(goodJoint, catalog)
     expect(issues.filter((i) => i.kind === 'overlap')).toEqual([])
   })
@@ -155,7 +171,8 @@ describe('overlap', () => {
   })
 
   it('catches a centerpiece dropped across a sidepiece', () => {
-    // A 3-wide centerpiece at col 5 covers 5,6,7 — including the flat at 6.
+    // The flat at 6 fills the bay from 5 to 6; a 3-wide plate anchored at 5
+    // wants that same bay for its own plate.
     const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-3', 5, 4)], catalog)
     expect(issues.filter((i) => i.kind === 'overlap')).toHaveLength(1)
   })
@@ -166,16 +183,47 @@ describe('overlap', () => {
     expect(issues.filter((i) => i.kind === 'overlap')).toEqual([])
   })
 
+  it('catches two sidepieces reaching for one slot from opposite sides', () => {
+    // A Left and a Right on the same column stand on opposite sides of it
+    // and share no bay at all — but a tang fills its slot, and the second
+    // one has nowhere to go.
+    const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'flat-right', 6, 4)], catalog)
+    expect(issues.filter((i) => i.kind === 'overlap')).toHaveLength(1)
+  })
+
   it('reports a pair once, not once per part', () => {
     const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'flat-left', 6, 4)], catalog)
     expect(issues.filter((i) => i.kind === 'overlap')).toHaveLength(1)
   })
 })
 
+describe('the column a part names is not the space it fills', () => {
+  // The bug this pair of tests pins down: a Flat Left mates with the plate
+  // anchored on its own column, because the bracket stands in the bay to the
+  // left of that column and the plate starts on it. Reading both as
+  // occupying the column itself called the joint a collision, and called the
+  // arrangement with a 21.6 mm gap in it correct.
+  it('reads a sidepiece and the plate on its own column as mated', () => {
+    const issues = findIssues(goodJoint, catalog)
+    expect(issues).toEqual([])
+  })
+
+  it('calls out the gap when the sidepiece is a column further out', () => {
+    const issues = findIssues(
+      [at('p1', 'flat-left', 5, 4), at('p2', 'blank-3', 6, 4), at('p3', 'flat-right', 9, 4)],
+      catalog,
+    )
+    expect(issues.filter((i) => i.kind === 'overlap')).toEqual([])
+    const unmounted = issues.filter((i) => i.kind === 'unmounted')
+    expect(unmounted).toHaveLength(1)
+    expect(unmounted[0]?.placementIds).toEqual(['p1'])
+  })
+})
+
 describe('height mismatch', () => {
   it('catches a short centerpiece between tall sidepieces', () => {
     const issues = findIssues(
-      [at('p1', 'flat-left', 6, 4), at('p2', 'blank-2', 7, 4), at('p3', 'flat-right', 10, 4)],
+      [at('p1', 'flat-left', 6, 4), at('p2', 'blank-2', 6, 4), at('p3', 'flat-right', 9, 4)],
       catalog,
     )
     const mismatch = issues.filter((i) => i.kind === 'height-mismatch')
@@ -194,7 +242,7 @@ describe('height mismatch', () => {
 
   it('says nothing when the parts are not touching', () => {
     const issues = findIssues(
-      [at('p1', 'flat-left', 2, 4), at('p2', 'blank-2', 7, 4), at('p3', 'flat-right', 10, 4)],
+      [at('p1', 'flat-left', 2, 4), at('p2', 'blank-2', 6, 4), at('p3', 'flat-right', 9, 4)],
       catalog,
     )
     const mismatch = issues.filter((i) => i.kind === 'height-mismatch')
@@ -203,7 +251,7 @@ describe('height mismatch', () => {
   })
 
   it('says nothing across different rows', () => {
-    const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-2', 7, 6)], catalog)
+    const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-2', 6, 6)], catalog)
     expect(issues.filter((i) => i.kind === 'height-mismatch')).toEqual([])
   })
 
@@ -224,11 +272,11 @@ describe('height mismatch', () => {
           bottomBelowSlotCenterMm: { odd: 5.4, even: 5.4 },
           matesByHeight: false,
         },
-        sizeMm: { z: 10.8 },
+        sizeMm: { x: 81.6, z: 10.8 },
       }),
     )
     const issues = findIssues(
-      [at('p1', 'flat-left', 6, 4), at('p2', 'gridfinity', 7, 4), at('p3', 'flat-right', 10, 4)],
+      [at('p1', 'flat-left', 6, 4), at('p2', 'gridfinity', 6, 4), at('p3', 'flat-right', 9, 4)],
       shelf,
     )
     expect(issues.filter((i) => i.kind === 'height-mismatch')).toEqual([])
@@ -253,7 +301,7 @@ describe('unmounted', () => {
   })
 
   it('is satisfied by a partner on either side', () => {
-    const left = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-3', 7, 4)], catalog)
+    const left = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-3', 6, 4)], catalog)
     expect(left.filter((i) => i.kind === 'unmounted')).toEqual([])
   })
 
@@ -263,7 +311,7 @@ describe('unmounted', () => {
   })
 
   it('is not satisfied by a partner on another row', () => {
-    const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-3', 7, 8)], catalog)
+    const issues = findIssues([at('p1', 'flat-left', 6, 4), at('p2', 'blank-3', 6, 8)], catalog)
     expect(issues.filter((i) => i.kind === 'unmounted')).toHaveLength(2)
   })
 })
@@ -320,7 +368,7 @@ describe('a shelf that overruns what holds it', () => {
   // shelf where it would sit if the bracket were long enough.
   it('warns when the shelf reaches past the deepest sidepiece beside it', () => {
     const issues = findIssues(
-      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-2', 3, 2)],
+      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-2', 4, 2)],
       catalog,
     )
     const overrun = issues.filter((i) => i.kind === 'unsupported-shelf')
@@ -332,7 +380,7 @@ describe('a shelf that overruns what holds it', () => {
 
   it('says nothing when the bracket is long enough', () => {
     const issues = findIssues(
-      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 3, 2)],
+      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 4, 2)],
       catalog,
     )
     expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
@@ -342,7 +390,11 @@ describe('a shelf that overruns what holds it', () => {
     // Held at one end by a bracket that reaches: not the problem this warns
     // about, which is a shelf nothing beside it can carry.
     const issues = findIssues(
-      [at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-2', 3, 2), at('r', 'bracket-4', 7, 2)],
+      [
+        at('s', 'blank-3', 4, 2, 'shelf'),
+        at('l', 'bracket-2', 4, 2),
+        at('r', 'bracket-4-right', 7, 2),
+      ],
       catalog,
     )
     expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
@@ -350,7 +402,7 @@ describe('a shelf that overruns what holds it', () => {
 
   it('leaves the same part alone when it is mounted flat', () => {
     const issues = findIssues(
-      [at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 3, 2)],
+      [at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 4, 2)],
       catalog,
     )
     expect(issues.filter((i) => i.kind === 'unsupported-shelf')).toEqual([])
@@ -366,10 +418,10 @@ describe('a shelf that overruns what holds it', () => {
     // Flat, a 3-high plate beside a 2-high bracket is a mismatch worth
     // saying. As a shelf the plate's h is depth, so the comparison is
     // meaningless and matesByHeight turns it off.
-    const flat = findIssues([at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 3, 2)], catalog)
+    const flat = findIssues([at('s', 'blank-3', 4, 2), at('l', 'bracket-2', 4, 2)], catalog)
     expect(flat.filter((i) => i.kind === 'height-mismatch')).toHaveLength(1)
 
-    const shelf = findIssues([at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 3, 2)], catalog)
+    const shelf = findIssues([at('s', 'blank-3', 4, 2, 'shelf'), at('l', 'bracket-4', 4, 2)], catalog)
     expect(shelf.filter((i) => i.kind === 'height-mismatch')).toEqual([])
   })
 })

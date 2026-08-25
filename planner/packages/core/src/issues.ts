@@ -7,21 +7,21 @@
  * would want pointed out, and to say which parts are involved so they can be
  * highlighted.
  *
- * Everything is derived from slot columns and wall-space heights, never from
- * a part's family name. `role` comes from the family archetype, which is the
- * only honest source: `Sidepieces/Retainers` is a centerpiece and a
- * Quickhook is a sidepiece.
+ * Everything is derived from where the parts stand along the wall and how
+ * tall they are, never from a part's family name. `role` comes from the
+ * family archetype, which is the only honest source: `Sidepieces/Retainers`
+ * is a centerpiece and a Quickhook is a sidepiece.
  */
 
 import {
   type Orientation,
   type OrientedPlacement,
-  occupiedColumns,
+  occupiedBays,
   placementOrigin,
 } from './placement'
 
 export type IssueKind =
-  /** Two parts want the same slot. */
+  /** Two parts want the same space. */
   | 'overlap'
   /** A centerpiece and the sidepiece beside it are different heights. */
   | 'height-mismatch'
@@ -82,9 +82,9 @@ interface Span {
   readonly placement: IssuePlacement
   readonly part: IssuePart
   readonly oriented: OrientedPlacement
-  readonly cols: readonly number[]
-  readonly minCol: number
-  readonly maxCol: number
+  /** The bays the body fills — see `occupiedBays`, not the slot columns. */
+  readonly firstBay: number
+  readonly lastBay: number
   readonly zMin: number
   readonly zMax: number
 }
@@ -96,22 +96,36 @@ function spanFor(placement: IssuePlacement, part: IssuePart): Span | null {
   const oriented = part.orientations[placement.orientation]
   if (!oriented) return null
 
-  const cols = occupiedColumns(oriented.rule, placement)
+  const bays = occupiedBays(oriented, placement)
   const origin = placementOrigin(oriented.rule, part.h, placement)
   return {
     placement,
     part,
     oriented,
-    cols,
-    minCol: Math.min(...cols),
-    maxCol: Math.max(...cols),
+    firstBay: bays.first,
+    lastBay: bays.last,
     zMin: origin.z,
     zMax: origin.z + oriented.sizeMm.z,
   }
 }
 
-function sharesColumn(a: Span, b: Span): boolean {
-  return a.minCol <= b.maxCol && b.minCol <= a.maxCol
+function sharesBay(a: Span, b: Span): boolean {
+  return a.firstBay <= b.lastBay && b.firstBay <= a.lastBay
+}
+
+/**
+ * Two sidepieces reaching for one slot.
+ *
+ * A tang fills its slot, so a second one has nowhere to go — and this is the
+ * one conflict bays cannot see, because a Left and a Right on the same
+ * column stand on opposite sides of it and share no bay at all.
+ */
+function sharesSlot(a: Span, b: Span): boolean {
+  return (
+    a.part.role === 'sidepiece' &&
+    b.part.role === 'sidepiece' &&
+    a.placement.col === b.placement.col
+  )
 }
 
 function overlapsVertically(a: Span, b: Span): boolean {
@@ -120,9 +134,9 @@ function overlapsVertically(a: Span, b: Span): boolean {
   )
 }
 
-/** Side by side with no gap: one ends where the other begins. */
+/** Side by side with no gap: one ends in the bay before the other starts. */
 function adjacent(a: Span, b: Span): boolean {
-  return a.maxCol + 1 === b.minCol || b.maxCol + 1 === a.minCol
+  return a.lastBay + 1 === b.firstBay || b.lastBay + 1 === a.firstBay
 }
 
 function issueId(kind: IssueKind, ids: readonly string[]): string {
@@ -164,7 +178,7 @@ export function findIssues(
       const a = spans[i]!
       const b = spans[j]!
 
-      if (sharesColumn(a, b) && overlapsVertically(a, b)) {
+      if ((sharesBay(a, b) || sharesSlot(a, b)) && overlapsVertically(a, b)) {
         issues.push({
           id: issueId('overlap', [a.placement.id, b.placement.id]),
           kind: 'overlap',
