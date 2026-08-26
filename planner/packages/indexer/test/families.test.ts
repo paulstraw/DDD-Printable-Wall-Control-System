@@ -514,4 +514,33 @@ describe('the Phase-1 joint, built from the shipped rules', () => {
       expect(verdict.intoLeftSocket.x, `${w} wide`).toBeGreaterThan(3.5)
     }
   })
+
+  // A spacer is nothing but its mounting plate, so seating one says nothing
+  // about which of its two faces the socket holds. A tool hook is that same
+  // plate carrying 19 mm of chisel rack, and anchoring it by the front face
+  // drove the plate 19 mm through the panel — the socket kept the tab it was
+  // handed, and the rack was the part left standing behind the wall.
+  const CHISELS = {
+    family: 'centerpieces/tool_hooks',
+    file: 'Centerpieces/Tool_hooks/3x3 Mayhew Tools 61020 Set - Chisels.stl',
+    name: '3x3 Mayhew Tools 61020 Set - Chisels',
+  }
+
+  it('seats a centerpiece that projects exactly where a spacer seats', () => {
+    const hook = assessJoint(buildPhase1Joint(3, 2, 127, CHISELS))
+    const spacer = assessJoint(buildPhase1Joint(3))
+
+    expect(hook.intoLeftSocket.y).toBeCloseTo(spacer.intoLeftSocket.y, 3)
+    expect(hook.intoRightSocket.y).toBeCloseTo(spacer.intoRightSocket.y, 3)
+    expect(hook.intoLeftSocket.x).toBeGreaterThan(3.5)
+    expect(hook.intoRightSocket.x).toBeGreaterThan(3.5)
+  })
+
+  it('leaves everything a centerpiece carries in front of the panel', () => {
+    const { centre } = buildPhase1Joint(3, 2, 127, CHISELS)
+    // 25.2 deep: 6.15 of plate, and 19.05 of rack standing off the wall.
+    expect(centre.bounds.max.y - centre.bounds.min.y).toBeCloseTo(25.2, 1)
+    expect(centre.bounds.max.y, 'nothing behind the panel').toBeLessThan(0)
+    expect(centre.bounds.min.y, 'the rack stands out in front').toBeCloseTo(-29.25, 1)
+  })
 })

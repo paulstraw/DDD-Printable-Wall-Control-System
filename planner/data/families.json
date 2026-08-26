@@ -148,7 +148,19 @@
         "bottomBelowSlotCenterNote": "Derived from the sidepiece anchor plus the measured 6.6 mm top gap, then checked to be independent of h.",
         "depth": {
           "frontFaceYMm": -10.2,
-          "note": "= -(18.7 - 8.5): the depth of the mounting interface itself, not of whatever sidepiece happens to hold it. This is what seats the tab in the socket."
+          "note": "= -(18.7 - 8.5): the depth of the mounting interface itself, not of whatever sidepiece happens to hold it. This is what seats the tab in the socket.",
+          "plateThicknessMm": 6.15,
+          "plateThicknessNote": [
+            "The mounting plate, and the reason the anchor above can be written",
+            "as a front face at all: a spacer is nothing but the plate, so its",
+            "two faces are these 6.15 mm apart and either one would do.",
+            "",
+            "The tab sits 0.5 mm in from the plate's back face in every tabbed",
+            "family measured - blank, perforated, locking, U hook, honeycomb and",
+            "the tool hooks - so the back face is what the socket actually",
+            "locates, at -4.05. A part that carries something adds it in front of",
+            "that plate, never behind it, and how much is measured per part."
+          ]
         }
       }
     }

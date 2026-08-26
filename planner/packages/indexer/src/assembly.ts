@@ -93,6 +93,34 @@ export function loadOverrides(): Map<string, PartOverride> {
   return overrides
 }
 
+/**
+ * Where a centerpiece's front face lands, given how deep the part measures.
+ *
+ * The anchor in families.json is written as a front face because for a spacer
+ * the plate *is* the part, and the two faces are 6.15 mm apart either way. A
+ * tool hook is that same plate carrying a rack, and its tab still sits 0.5 mm
+ * in from the plate's back face — the socket holds the back of a centerpiece,
+ * and whatever the part carries has to be added in front of the anchor rather
+ * than behind it. Read as a front face, an 87 mm pliers rack put 6 mm of
+ * itself on the wall and the remaining 81 mm through it.
+ *
+ * The plate is what the family has in common; the projection is measured,
+ * because a tool hook family has no rule for what its parts hold. A part
+ * thinner than the plate projects nothing.
+ */
+export function centerpieceFrontFaceY(rule: FamilyRule, depthMm: number): number {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = rule as any
+  // A tabless family is not held by a plate in a groove at all: a pin bridges
+  // its notch to the socket, and that notch is centred in its own thickness.
+  // Its whole body is the interface, so there is nothing standing in front.
+  const projection =
+    r.tabs?.present === false
+      ? 0
+      : Math.max(0, depthMm - (r.anchor.depth.plateThicknessMm as number))
+  return (r.anchor.depth.frontFaceYMm as number) - projection
+}
+
 export function ruleFor(id: string): FamilyRule {
   const found = resolvedFamilies().find((f) => f.id === id)
   if (!found) throw new Error(`no family rule for ${id}`)
@@ -187,14 +215,21 @@ export function placeSidepiece(opts: {
   }
 }
 
+/**
+ * Place a centerpiece centred on its column span.
+ *
+ * Its depth is measured here rather than passed in, because that is what the
+ * front face follows: a part that carries something stands out in front of
+ * the plate the socket holds. See `centerpieceFrontFaceY`.
+ */
 export function placeCenterpiece(opts: {
   name: string
   file: string
   map: AxisMap
+  rule: FamilyRule
   leftSlotX: number
   widthUnits: number
   bottomZ: number
-  frontFaceY: number
   tabThicknessMm: number
 }): Placed {
   const mesh = readStlFile(join(REPO_ROOT, opts.file))
@@ -202,9 +237,12 @@ export function placeCenterpiece(opts: {
   const width = src.max.x - src.min.x
   const span = 25.4 * opts.widthUnits
 
+  const trial = placeBounds(src, opts.map, { x: 0, y: 0, z: 0 })
+  const depthMm = trial.bounds.max.y - trial.bounds.min.y
+
   const final = placeBounds(src, opts.map, {
     x: opts.leftSlotX + (span - width) / 2,
-    y: opts.frontFaceY,
+    y: centerpieceFrontFaceY(opts.rule, depthMm),
     z: opts.bottomZ,
   })
   return {
@@ -216,18 +254,26 @@ export function placeCenterpiece(opts: {
   }
 }
 
+/** Which centerpiece to seat, when it is not the spacer the phase was named for. */
+export interface CentrePiece {
+  readonly family: string
+  readonly file: string
+  readonly name: string
+}
+
 /** The Phase-1 joint, built entirely from the shipped rules. */
-export function buildPhase1Joint(widthUnits = 3, col = 2, slotZ = 127) {
+export function buildPhase1Joint(widthUnits = 3, col = 2, slotZ = 127, centre?: CentrePiece) {
   const flats = ruleFor('sidepieces/flats')
-  const blank = ruleFor('centerpieces/spacer_blank')
+  const blank = ruleFor(centre?.family ?? 'centerpieces/spacer_blank')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = flats as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const b = blank as any
-  // A sidepiece's front face follows its own depth; the centerpiece uses the
-  // mounting interface depth. For a Flat the two coincide at -10.2, which is
-  // exactly why the joint is front-flush.
+  // A sidepiece's front face follows its own depth; the centerpiece follows
+  // its own mounting plate, and finds its own front face from that. For a
+  // Flat and a spacer the two land at the same -10.2, which is exactly why
+  // this joint is front-flush and a joint holding a tool hook is not.
   const flatDepthMm = 18.7
   const frontFaceY = -(flatDepthMm - (f.anchor.tang.depthMm as number))
   const slotX = (c: number) => 25.4 + 25.4 * c
@@ -254,18 +300,18 @@ export function buildPhase1Joint(widthUnits = 3, col = 2, slotZ = 127) {
     tangWidthMm: f.anchor.tang.widthMm,
   })
 
-  const centre = placeCenterpiece({
-    name: `3x${widthUnits} Spacer blank`,
-    file: `Centerpieces/Spacer_blank/3x${widthUnits} Spacer blank.stl`,
+  const middle = placeCenterpiece({
+    name: centre?.name ?? `3x${widthUnits} Spacer blank`,
+    file: centre?.file ?? `Centerpieces/Spacer_blank/3x${widthUnits} Spacer blank.stl`,
     map: b.printToWall,
+    rule: blank,
     leftSlotX: slotX(col),
     widthUnits,
     bottomZ: slotZ - b.anchor.bottomBelowSlotCenterMm.odd,
-    frontFaceY,
-    tabThicknessMm: b.tabs.thicknessMm ?? 2.4,
+    tabThicknessMm: b.tabs?.thicknessMm ?? 2.4,
   })
 
-  return { left, centre, right }
+  return { left, centre: middle, right }
 }
 
 /** Do the two sockets face the centerpiece, and does each tab reach one? */

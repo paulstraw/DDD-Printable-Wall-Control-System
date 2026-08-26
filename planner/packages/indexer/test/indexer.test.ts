@@ -109,6 +109,12 @@ describe('thumbnail rasteriser', () => {
   })
 })
 
+/** As much of an index row's orientation as the depth assertions read. */
+interface OrientedShape {
+  rule: { frontFaceYMm: number }
+  sizeMm: { x: number; y: number; z: number }
+}
+
 describe('the indexer, end to end', () => {
   const out = mkdtempSync(join(tmpdir(), 'ddd-index-'))
   afterAll(() => rmSync(out, { recursive: true, force: true }))
@@ -233,23 +239,40 @@ describe('the indexer, end to end', () => {
     expect(by('3x3 Spacer blank').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
     expect(by('3x3 Spacer clip-on').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
 
-    // Centerpieces that hang in the plane of the wall share the
-    // mounting-interface front face; sidepieces sit at their own depth, which
-    // is how a 67 mm bracket and an 18.7 mm flat both hang correctly off the
-    // same slot.
-    const centerpieceFaces = new Set(
-      index.parts
-        .filter(
-          (p: { family: string }) =>
-            p.family.startsWith('centerpieces/') && p.family !== 'centerpieces/gridfinity',
-        )
-        .map(
-          (p: { orientations: { flat: { rule: { frontFaceYMm: number } } } }) =>
-            p.orientations.flat.rule.frontFaceYMm,
+    // Centerpieces that hang in the plane of the wall share the mounting
+    // interface, and what they share is its *back* face: the tab is 0.5 mm in
+    // from there, so a plate carrying a rack keeps its back at -4.05 and puts
+    // the rack in front. A part thinner than the plate has nothing to put in
+    // front and stays where the front-face anchor left it.
+    const tabbed = index.parts.filter(
+      (p: { family: string }) =>
+        p.family.startsWith('centerpieces/') &&
+        !['centerpieces/gridfinity', 'centerpieces/spacer_blank_flush', 'centerpieces/spacer_clip-on'].includes(
+          p.family,
         ),
-    )
-    expect(centerpieceFaces).toEqual(new Set([-10.2]))
+    ) as { name: string; orientations: { flat: OrientedShape } }[]
+
+    for (const p of tabbed) {
+      const { rule, sizeMm } = p.orientations.flat
+      if (sizeMm.y >= 6.15) expect(rule.frontFaceYMm + sizeMm.y, `${p.name} back face`).toBeCloseTo(-4.05, 1)
+      else expect(rule.frontFaceYMm, `${p.name} front face`).toBeCloseTo(-10.2, 1)
+    }
+
+    // The tabless families are not held that way at all — a pin bridges their
+    // notch to the socket, centred in their own thickness — so their whole
+    // body is the interface and the front face is still the datum.
+    expect(by('3x3 Spacer clip-on').orientations.flat.rule.frontFaceYMm).toBeCloseTo(-10.2, 1)
+    expect(by('3x3 Spacer blank flush').orientations.flat.rule.frontFaceYMm).toBeCloseTo(-10.2, 1)
+
+    // Sidepieces sit at their own depth, which is how a 67 mm bracket and an
+    // 18.7 mm flat both hang correctly off the same slot.
     expect(by('3x0 Flat Left').orientations.flat.rule.frontFaceYMm).toBeCloseTo(-10.2, 1)
+
+    // The whole point, on the part that made it visible: 87.2 mm of pliers
+    // rack, of which only the 6.15 mm plate is the mounting interface.
+    const rack = by('4x4 Large Pliers Rack').orientations.flat
+    expect(rack.sizeMm.y).toBeCloseTo(87.2, 1)
+    expect(rack.rule.frontFaceYMm).toBeCloseTo(-4.05 - 87.2, 1)
 
     // A Gridfinity frame is the exception: rotated a quarter turn out of the
     // wall, it is a shelf, so it projects by what the filename calls its

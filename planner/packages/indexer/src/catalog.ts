@@ -19,7 +19,15 @@ import {
   parsePartName,
   placeBounds,
 } from '@ddd-planner/core'
-import { PLANNER_ROOT, REPO_ROOT, loadFamilies, loadOverrides, resolvedFamilies } from './assembly'
+import {
+  type FamilyRule,
+  PLANNER_ROOT,
+  REPO_ROOT,
+  centerpieceFrontFaceY,
+  loadFamilies,
+  loadOverrides,
+  resolvedFamilies,
+} from './assembly'
 import { meshToGlb } from './gltf'
 import { readStlFile } from './stl'
 import { renderWebp } from './thumbnail'
@@ -111,7 +119,7 @@ function placementFor(
   return {
     occupiesColumns: columnsFor(parsed),
     offsetFromSlotXMm: offsetFor(parsed, placed.widthMm),
-    frontFaceYMm: rule.anchor.depth.frontFaceYMm,
+    frontFaceYMm: centerpieceFrontFaceY(family as FamilyRule, placed.depthMm),
     bottomBelowSlotCenterMm: rule.anchor.bottomBelowSlotCenterMm,
     matesByHeight: true,
   }

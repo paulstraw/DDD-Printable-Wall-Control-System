@@ -22,7 +22,14 @@ export interface PlacementRule {
   readonly occupiesColumns: number
   /** Added to the anchor slot's X to get the part's minimum corner. */
   readonly offsetFromSlotXMm: number
-  /** Front face, shared between a centerpiece and its sidepieces. */
+  /**
+   * The part's front face — its minimum Y, since Y runs into the wall.
+   *
+   * Shared between a centerpiece and its sidepieces only when the centerpiece
+   * is nothing but its mounting plate. What the two really share is the
+   * plate; a centerpiece that carries something puts that in front, so a tool
+   * hook's front face stands well clear of the flat holding it.
+   */
   readonly frontFaceYMm: number
   /**
    * Drop from the engaged slot's centre to the part's bottom edge.
