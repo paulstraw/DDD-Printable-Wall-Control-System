@@ -1,15 +1,25 @@
 {
   "$schemaVersion": 1,
   "$comment": [
-    "Per-part corrections, for parts whose filename disagrees with their model.",
+    "Per-part corrections, for the parts that disagree with their family.",
     "",
-    "Every entry here was found by packages/indexer/src/audit.ts and confirmed",
-    "in two dimensions: a correction is only made when the measured height",
-    "matches one unit count *and* the measured width independently matches",
-    "another. A height that merely looks wrong is not enough, because a bbox",
-    "can legitimately exceed the mounting plate — see `perPart` in families.json.",
+    "Two kinds, and they fail in different ways. `h`/`w` correct a filename",
+    "that disagrees with its model: every one was found by",
+    "packages/indexer/src/audit.ts and confirmed in two dimensions — the",
+    "measured height matches one unit count *and* the measured width",
+    "independently matches another. A height that merely looks wrong is not",
+    "enough, because a bbox can legitimately exceed the mounting plate — see",
+    "`perPart` in families.json.",
     "",
-    "Ten of 541 parts, all in the community-contributed Tool_hooks. The",
+    "`turnZDeg` corrects a model drawn a quarter or a half turn round from",
+    "the rest of its family, in degrees anticlockwise seen from in front and",
+    "above. The name is right and the mesh is turned, which is the opposite",
+    "fault. A quarter turn shows up in the audit the same way a transposed",
+    "name does, so it meets the same two-dimension bar; a half turn does not",
+    "move a bounding box at all and has to be seen, so those entries say what",
+    "was looked at.",
+    "",
+    "Thirteen of 541 parts, all in the community-contributed Tool_hooks. The",
     "seventeen curated families audit clean, which is the strongest evidence",
     "yet that the parametric model holds."
   ],
@@ -71,6 +81,21 @@
       "name": "2x6 12x 6mm Finger Slots",
       "h": 1,
       "reason": "measures 25.2 tall (h=1); the width of 157.8 already agrees with w=6"
+    },
+    {
+      "name": "2x5 Irwin Pliers LgLock Linemans",
+      "turnZDeg": 90,
+      "reason": "drawn a quarter turn clockwise of its family: measures 50.6 across print X (h=2) and 132.4 along print Y (w=5), which is both of its named dimensions in the wrong axes. Turned back, its profile is the same rising ramp as the three Irwin racks beside it"
+    },
+    {
+      "name": "4x4 Large Pliers Rack",
+      "turnZDeg": 180,
+      "reason": "drawn back to front: the slots the pliers drop into open toward the panel, and the tall closed face stands out in the room. A half turn leaves the bbox alone, so this was found by looking at the mesh from behind the wall rather than by the audit"
+    },
+    {
+      "name": "4x6 Medium Pliers Rack",
+      "turnZDeg": 180,
+      "reason": "drawn back to front, the same way round as the Large Pliers Rack and confirmed the same way: its six slots open toward the panel instead of into the room"
     }
   ],
 

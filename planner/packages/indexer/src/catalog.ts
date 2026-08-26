@@ -18,6 +18,7 @@ import {
   applyMatrix,
   parsePartName,
   placeBounds,
+  turnedAboutZ,
 } from '@ddd-planner/core'
 import {
   type FamilyRule,
@@ -66,7 +67,7 @@ export interface PartRow {
   renderedTriangles: number
   vertices: number
   volumeMm3: number
-  /** Set when the filename disagreed with the model and was corrected. */
+  /** Set when the part disagreed with its family and was corrected — see overrides.json. */
   correction?: string
   /** Size of the source STL, so the app can estimate a download before starting. */
   sourceBytes: number
@@ -323,13 +324,30 @@ function fastenersByOrientationFor(
   return out
 }
 
-function mapFor(family: Record<string, unknown>, variant: string | null): AxisMap {
+/**
+ * Which way round this part is drawn.
+ *
+ * The family answers for all of its parts; `turnZDeg` is the escape hatch for
+ * the handful of community hooks drawn round from the rest of theirs. It is
+ * applied here rather than at draw time on purpose: everything downstream —
+ * the glTF, the thumbnail, `sizeMm`, the measured ear, every orientation — is
+ * derived from this one matrix, so a turn recorded once cannot be applied to
+ * some of them and forgotten by the others.
+ */
+function mapFor(
+  family: Record<string, unknown>,
+  variant: string | null,
+  turnZDeg = 0,
+): AxisMap {
   const p = family.printToWall as AxisMap | Record<string, AxisMap>
-  if (typeof (p as AxisMap).x === 'string') return p as AxisMap
-  const byVariant = p as Record<string, AxisMap>
-  const chosen = byVariant[variant ?? 'plain'] ?? byVariant.plain ?? Object.values(byVariant)[0]
+  const chosen =
+    typeof (p as AxisMap).x === 'string'
+      ? (p as AxisMap)
+      : (p as Record<string, AxisMap>)[variant ?? 'plain'] ??
+        (p as Record<string, AxisMap>).plain ??
+        Object.values(p as Record<string, AxisMap>)[0]
   if (!chosen) throw new Error(`family ${String(family.id)} has no usable printToWall`)
-  return chosen
+  return turnedAboutZ(chosen, turnZDeg)
 }
 
 export interface IndexStats {
@@ -376,7 +394,8 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
     for (const file of files) {
       const named = parsePartName(file)
       // A correction replaces the dimensions the filename claims, before any
-      // of them reach placement or the catalog facets.
+      // of them reach placement or the catalog facets. It may also turn the
+      // mesh — see `mapFor`.
       const fix = overrides.get(named.filename)
       const parsed = fix
         ? { ...named, h: fix.h ?? named.h, w: fix.w ?? named.w }
@@ -395,7 +414,9 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const id = isFastener ? slug('fastener', parsed.filename) : slug(family.id as string, parsed.filename)
       if (isFastener && fasteners[parsed.filename]) continue
 
-      const map = isFastener ? ({ x: '+x', y: '+y', z: '+z' } as AxisMap) : mapFor(family, parsed.variant)
+      const map = isFastener
+        ? ({ x: '+x', y: '+y', z: '+z' } as AxisMap)
+        : mapFor(family, parsed.variant, fix?.turnZDeg)
       const source: Bounds = { min: mesh.bbox.min, max: mesh.bbox.max }
       const placed = placeBounds(source, map, { x: 0, y: 0, z: 0 })
 

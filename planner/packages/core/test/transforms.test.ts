@@ -14,6 +14,7 @@ import {
   rotationMatrix,
   sidepieceFrontFaceY,
   sidepieceOrigin,
+  turnedAboutZ,
 } from '../src/transforms'
 
 const IDENTITY: AxisMap = { x: '+x', y: '+y', z: '+z' }
@@ -85,6 +86,55 @@ describe('rotateBounds', () => {
     expect(rotated.min.x).toBeLessThan(rotated.max.x)
     expect(rotated.min.y).toBeLessThan(rotated.max.y)
     expect(boundsSize(rotated)).toEqual(boundsSize(rotateBounds(FLAT_LEFT, FLAT_3X0_LEFT)))
+  })
+})
+
+describe('turnedAboutZ', () => {
+  it('leaves the map alone at a whole number of full turns', () => {
+    expect(turnedAboutZ(FLAT_LEFT, 0)).toEqual(FLAT_LEFT)
+    expect(turnedAboutZ(FLAT_LEFT, 360)).toEqual(FLAT_LEFT)
+    expect(turnedAboutZ(FLAT_LEFT, -720)).toEqual(FLAT_LEFT)
+  })
+
+  it('turns a point anticlockwise seen from above', () => {
+    // Standing in front of the wall looking down: +x is to the right and +y
+    // runs away into the panel, so a quarter turn takes the right hand away.
+    const turned = turnedAboutZ(IDENTITY, 90)
+    const p = applyAxisMap(turned, { x: 1, y: 0, z: 5 })
+    expect(p.x).toBeCloseTo(0, 6)
+    expect(p.y).toBeCloseTo(1, 6)
+    expect(p.z).toBeCloseTo(5, 6)
+  })
+
+  it('undoes itself, and four quarters make a whole', () => {
+    expect(turnedAboutZ(turnedAboutZ(FLAT_LEFT, 90), -90)).toEqual(FLAT_LEFT)
+    expect(turnedAboutZ(FLAT_LEFT, 90 * 4)).toEqual(FLAT_LEFT)
+    expect(turnedAboutZ(turnedAboutZ(FLAT_LEFT, 180), 180)).toEqual(FLAT_LEFT)
+  })
+
+  it('leaves up pointing up, which is why it is the only turn offered', () => {
+    for (const degrees of [90, 180, 270]) {
+      expect(turnedAboutZ(FLAT_LEFT, degrees).z).toBe(FLAT_LEFT.z)
+    }
+  })
+
+  it('stays a proper rotation, so a turned part is never mirrored', () => {
+    for (const map of [IDENTITY, FLAT_LEFT, FLAT_RIGHT]) {
+      for (const degrees of [90, 180, 270]) {
+        expect(isProperRotation(turnedAboutZ(map, degrees)), `${map.x} by ${degrees}`).toBe(true)
+      }
+    }
+  })
+
+  it('swaps width for depth on a quarter turn and keeps both on a half', () => {
+    const box: Bounds = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 4, z: 2 } }
+    expect(boundsSize(rotateBounds(turnedAboutZ(IDENTITY, 90), box))).toEqual({ x: 4, y: 10, z: 2 })
+    expect(boundsSize(rotateBounds(turnedAboutZ(IDENTITY, 180), box))).toEqual({ x: 10, y: 4, z: 2 })
+  })
+
+  it('refuses an angle that is not a quarter turn', () => {
+    expect(() => turnedAboutZ(IDENTITY, 45)).toThrow(RangeError)
+    expect(() => turnedAboutZ(IDENTITY, 1)).toThrow(/square to the panel/)
   })
 })
 

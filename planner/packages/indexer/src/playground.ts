@@ -62,7 +62,11 @@ const SUBJECTS: readonly { family: string; prefer?: readonly string[] }[] = [
   },
   {
     family: 'centerpieces/tool_hooks',
-    prefer: ['2x2 38mm Hammer Hook', '2x3 5x 6mm Box Wrench holder'],
+    // The Medium Pliers Rack is here for the same reason a hook is: its six
+    // slots have to open into the room, and a rack drawn back to front looks
+    // like a solid block from the front and nothing else gives it away. It is
+    // one of the three parts in this family that carries a `turnZDeg`.
+    prefer: ['2x2 38mm Hammer Hook', '2x3 5x 6mm Box Wrench holder', '4x6 Medium Pliers Rack'],
   },
 ]
 

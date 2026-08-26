@@ -8,7 +8,7 @@ import { auditLibrary } from '../src/audit'
 const FILE = JSON.parse(
   readFileSync(join(PLANNER_ROOT, 'data', 'overrides.json'), 'utf8'),
 ) as {
-  parts: { name: string; h?: number; w?: number; reason: string }[]
+  parts: { name: string; h?: number; w?: number; turnZDeg?: number; reason: string }[]
   notCorrected: { name: string; reason: string }[]
 }
 
@@ -37,8 +37,21 @@ describe('overrides.json', () => {
     for (const entry of FILE.parts) {
       const named = parsePartName(entry.name)
       const changed = (entry.h !== undefined && entry.h !== named.h) ||
-        (entry.w !== undefined && entry.w !== named.w)
+        (entry.w !== undefined && entry.w !== named.w) ||
+        (entry.turnZDeg !== undefined && entry.turnZDeg % 360 !== 0)
       expect(changed, `${entry.name} overrides nothing`).toBe(true)
+    }
+  })
+
+  it('turns only by quarters, and never out of the family a part belongs to', () => {
+    for (const entry of FILE.parts) {
+      if (entry.turnZDeg === undefined) continue
+      expect(entry.turnZDeg % 90, `${entry.name} is not a quarter turn`).toBe(0)
+      // A turn is a correction to one mesh. An entry that also renamed the
+      // part would be two claims about it at once, and the second would go
+      // unchecked - the audit measures the turned box.
+      expect(entry.h, `${entry.name} both turns and renames`).toBeUndefined()
+      expect(entry.w, `${entry.name} both turns and renames`).toBeUndefined()
     }
   })
 
@@ -80,8 +93,20 @@ describe('the audit, with overrides applied', () => {
     expect(elsewhere.map((f) => `${f.family}/${f.part}`)).toEqual([])
   })
 
-  it('corrects ten parts', () => {
-    const before = auditLibrary(false).length
-    expect(before - findings.length).toBe(FILE.parts.length)
+  it('clears exactly the parts whose fault it can see', () => {
+    const before = new Set(auditLibrary(false).map((f) => f.part))
+    const after = new Set(findings.map((f) => f.part))
+    const cleared = [...before].filter((name) => !after.has(name)).sort()
+
+    // A half turn does not move a bounding box, so a rack facing the wrong
+    // way was never something the audit could have found - those entries are
+    // here because someone looked at the mesh. Everything else is a claim
+    // about a measurement, and has to show up as one.
+    const measurable = FILE.parts
+      .filter((p) => p.h !== undefined || p.w !== undefined || (p.turnZDeg ?? 0) % 180 !== 0)
+      .map((p) => p.name)
+      .sort()
+
+    expect(cleared).toEqual(measurable)
   })
 })

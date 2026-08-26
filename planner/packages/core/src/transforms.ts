@@ -79,6 +79,46 @@ export function isProperRotation(map: AxisMap): boolean {
   return distinct && determinant(map) === 1
 }
 
+/** The same axis, read the other way. */
+function reverse(spec: AxisSpec): AxisSpec {
+  return `${spec[0] === '-' ? '+' : '-'}${spec[1]}` as AxisSpec
+}
+
+/**
+ * The same map, with the part turned about wall Z.
+ *
+ * About Z and only about Z, for the reason the centerpiece archetype already
+ * gives: a turn about Z leaves up pointing up, so a rack still opens upward
+ * and the ribs it hangs by stay underneath. A turn about X or Y would fix
+ * which way a part faces and break how it seats in the same move.
+ *
+ * Quarter turns only, and signed the way the wall is looked at: standing in
+ * front and looking down, a positive angle is anticlockwise. So a part drawn
+ * a quarter turn clockwise of its family is put right by `+90`.
+ *
+ * This is a correction, not a placement choice. Every part in a family is
+ * drawn the same way round; where one is not, this says by how much rather
+ * than restating the whole map, because a turn is what a reader can check
+ * against the model and a second axis map is not.
+ */
+export function turnedAboutZ(map: AxisMap, degrees: number): AxisMap {
+  const quarters = degrees / 90
+  if (!Number.isInteger(quarters)) {
+    throw new RangeError(`${degrees} is not a quarter turn; parts mount square to the panel`)
+  }
+
+  switch (((quarters % 4) + 4) % 4) {
+    case 1:
+      return { x: reverse(map.y), y: map.x, z: map.z }
+    case 2:
+      return { x: reverse(map.x), y: reverse(map.y), z: map.z }
+    case 3:
+      return { x: map.y, y: reverse(map.x), z: map.z }
+    default:
+      return map
+  }
+}
+
 export function applyAxisMap(map: AxisMap, v: Vec3): Vec3 {
   const read = (spec: AxisSpec) => signOf(spec) * v[axisOf(spec)]
   return { x: read(map.x), y: read(map.y), z: read(map.z) }

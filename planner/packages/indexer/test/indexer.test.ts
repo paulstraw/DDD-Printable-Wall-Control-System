@@ -148,6 +148,34 @@ describe('the indexer, end to end', () => {
     expect(flat.sizeMm.z).toBeCloseTo(85.7, 1)
   })
 
+  it('turns the parts overrides.json says are drawn round', async () => {
+    const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
+    const by = (name: string) =>
+      index.parts.find((p: { name: string }) => p.name === name) as {
+        sizeMm: { x: number; y: number; z: number }
+        correction?: string
+      }
+
+    // The Linemans rack is drawn a quarter turn clockwise of the three Irwin
+    // racks beside it. Turned back it measures what they measure, which is
+    // both what the correction claims and the only place in the shipped index
+    // a turn is visible at all - a half turn leaves a bounding box alone. So
+    // this is what stands for the two racks as well: one call site, and the
+    // three entries go through it together.
+    expect(by('2x5 Irwin Pliers LgLock Linemans').sizeMm).toEqual(
+      by('2x5 Irwin Pliers Crimper Stripper').sizeMm,
+    )
+
+    // And it says so, rather than quietly disagreeing with its own filename.
+    for (const name of [
+      '2x5 Irwin Pliers LgLock Linemans',
+      '4x4 Large Pliers Rack',
+      '4x6 Medium Pliers Rack',
+    ]) {
+      expect(by(name).correction, name).toBeTruthy()
+    }
+  })
+
   it('gives ids that are safe in a URL', async () => {
     const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'))
     const ids = new Set<string>()

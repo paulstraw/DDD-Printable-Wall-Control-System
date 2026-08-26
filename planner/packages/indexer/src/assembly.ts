@@ -72,6 +72,8 @@ export interface PartOverride {
   readonly name: string
   readonly h?: number
   readonly w?: number
+  /** Degrees anticlockwise about wall Z, for a mesh drawn round from its family. */
+  readonly turnZDeg?: number
   readonly reason: string
 }
 
@@ -80,8 +82,9 @@ let overrides: Map<string, PartOverride> | null = null
 /**
  * Per-part corrections, keyed by filename without extension.
  *
- * Only for parts whose name disagrees with their model in a way confirmed in
- * two dimensions — see data/overrides.json for why that bar matters.
+ * Two kinds: a name that disagrees with its model, corrected in `h`/`w`, and
+ * a model drawn round from the rest of its family, corrected in `turnZDeg`.
+ * See data/overrides.json for the bar each one has to clear.
  */
 export function loadOverrides(): Map<string, PartOverride> {
   if (!overrides) {

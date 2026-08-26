@@ -117,10 +117,13 @@ panel says so.
 
 ### When a part is wrong
 
-`planner/data/overrides.json` corrects individual parts whose *names* disagree with their
-geometry. There are currently **10**, all in the community `Tool_hooks` folder — 1.8% of the
-library. Two more are recorded as deliberately *not* corrected, with the reason, so nobody
-re-litigates them later.
+`planner/data/overrides.json` corrects individual parts that disagree with their family, in one
+of two ways. Ten have a *name* that disagrees with their geometry, and get corrected dimensions.
+Three are drawn round from the rest of their family — a rack whose slots open at the panel
+instead of into the room — and get a quarter or a half turn about wall Z, which the indexer bakes
+into the model, the thumbnail and every measurement taken from it. All **13** are in the
+community `Tool_hooks` folder, 2.4% of the library. Two more parts are recorded as deliberately
+*not* corrected, with the reason, so nobody re-litigates them later.
 
 `npm run audit --workspace @ddd-planner/indexer` checks every part against the rules its family
 claims and prints what disagrees. It applies the overrides and reports what remains, so it is a
@@ -137,7 +140,7 @@ npm run index     # build the part library from the STLs (~17s)
 npm run dev
 ```
 
-`npm test` runs 456 tests across the three packages. `npm run typecheck` covers all three under
+`npm test` runs 494 tests across the three packages. `npm run typecheck` covers all three under
 `strict` plus `noUncheckedIndexedAccess`.
 
 ### The spike check

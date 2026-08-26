@@ -16,7 +16,7 @@
 
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { parsePartName } from '@ddd-planner/core'
+import { boundsSize, parsePartName, rotateBounds, turnedAboutZ } from '@ddd-planner/core'
 import { REPO_ROOT, loadOverrides, resolvedFamilies } from './assembly'
 import { readStlFile } from './stl'
 
@@ -24,6 +24,9 @@ const CENTERPIECE_HEIGHT = (n: number) => 25.4 * n - 0.2
 const FLATS_HEIGHT: Record<number, number> = {
   1: 34.9, 2: 57.2, 3: 85.7, 4: 108, 5: 136.5, 6: 158.8, 7: 187.3, 8: 209.6,
 }
+
+/** The frame the audit measures in: print axes, before any family map. */
+const PRINT_AXES = { x: '+x', y: '+y', z: '+z' } as const
 
 export interface Finding {
   readonly part: string
@@ -66,8 +69,14 @@ export function auditLibrary(applyOverrides = true): Finding[] {
       const fix = overrides.get(named.filename)
       const parsed = fix ? { ...named, h: fix.h ?? named.h, w: fix.w ?? named.w } : named
 
+      // A mesh drawn round from its family reads as a name disagreement here,
+      // because print Y stops being the dimension the name calls height. Turn
+      // it back before measuring and the two numbers land where they belong —
+      // which is the second dimension that confirms the turn.
       const b = readStlFile(join(REPO_ROOT, rule.dir, file)).bbox
-      const sizeMm = { x: b.size.x, y: b.size.y, z: b.size.z }
+      const sizeMm = fix?.turnZDeg
+        ? boundsSize(rotateBounds(turnedAboutZ(PRINT_AXES, fix.turnZDeg), b))
+        : { x: b.size.x, y: b.size.y, z: b.size.z }
       const h = parsed.h as number
       const w = parsed.w as number
       const kind = rule.kind as string
