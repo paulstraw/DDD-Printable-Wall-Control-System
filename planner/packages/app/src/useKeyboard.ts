@@ -9,8 +9,8 @@ function isTyping(target: EventTarget | null): boolean {
 
 /**
  * Arrow keys nudge the selection by one slot; Delete removes it; R turns it
- * between flat and shelf; Cmd/Ctrl+A takes everything; Escape deselects or
- * abandons a drag.
+ * between flat and shelf; C cuts a cross-section through the wall; Cmd/Ctrl+A
+ * takes everything; Escape deselects or abandons a drag.
  *
  * A nudge is a whole slot, not a pixel — there is nowhere else a part can go,
  * so free movement would only ever be undone by the snap. Every one of these
@@ -24,6 +24,7 @@ export function useKeyboard() {
   const cancelDrag = useStore((s) => s.cancelDrag)
   const selectAll = useStore((s) => s.selectAll)
   const setOrientation = useStore((s) => s.setOrientation)
+  const toggleSection = useStore((s) => s.toggleSection)
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -65,6 +66,13 @@ export function useKeyboard() {
           setOrientation(allShelves ? 'flat' : 'shelf')
           break
         }
+        case 'c':
+        case 'C':
+          // Cmd/Ctrl+C is copy, and taking it would be a poor trade for a
+          // debug overlay.
+          if (event.metaKey || event.ctrlKey) return
+          toggleSection()
+          break
         case 'Escape':
           cancelDrag()
           select(null)
@@ -77,5 +85,5 @@ export function useKeyboard() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation])
+  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation, toggleSection])
 }

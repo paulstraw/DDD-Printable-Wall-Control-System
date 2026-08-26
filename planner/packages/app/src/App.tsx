@@ -7,6 +7,7 @@ import { partById, useStore } from './store'
 import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
 import { EmptyState } from './ui/EmptyState'
+import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
 import { OrientationToggle } from './ui/OrientationToggle'
 import { SaveAssembly } from './ui/SaveAssembly'
@@ -73,7 +74,7 @@ export function App() {
           ) : (
             <>
               drag a part onto the wall · <kbd>⇧</kbd>click or <kbd>⇧</kbd>drag to
-              select · <kbd>F</kbd> to face it
+              select · <kbd>F</kbd> to face it · <kbd>C</kbd> to cut
             </>
           )}
         </span>
@@ -96,6 +97,7 @@ export function App() {
             <Scene board={board} />
           </Canvas>
           <EmptyState />
+          <SectionHud />
         </div>
         <div className="right">
           <IssuesPanel />

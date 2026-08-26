@@ -881,3 +881,79 @@ canvas {
     padding: 0.9rem 1rem;
   }
 }
+
+/*
+ * The cross-section's controls, in the corner of the viewport it is cutting.
+ *
+ * Inside the picture rather than up in the header: they describe what is
+ * being drawn, not what is on the wall, and they come and go with the cut.
+ * Small enough to sit clear of the board at any sane camera distance.
+ */
+.section-hud {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  background: rgba(255, 255, 255, 0.93);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(20, 25, 35, 0.09);
+}
+
+.section-axes {
+  display: inline-flex;
+}
+
+.section-axes button {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.section-axes button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.section-axes button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.section-axes button + button {
+  margin-left: -1px;
+}
+
+.section-axes button.is-current {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/*
+ * Flip is a toggle, so it has to *look* pressed, not just report itself as
+ * pressed. Which half is kept is otherwise only readable from the picture,
+ * which is exactly the thing the user is trying to interpret.
+ */
+.section-hud .ghost-button[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/*
+ * Tabular figures: the number changes on every pointer move during a drag,
+ * and proportional digits make it jitter sideways while you are reading it.
+ */
+.section-readout {
+  min-width: 5.5rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}

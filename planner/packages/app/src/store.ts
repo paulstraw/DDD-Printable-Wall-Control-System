@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   type Assembly,
+  type Axis,
   type Board,
   type Point2,
   type Orientation,
@@ -185,6 +186,18 @@ interface State {
   dismissIssue: (id: string) => void
   restoreIssues: () => void
 
+  /**
+   * The cross-section overlay. Depth is the axis the 3D view reads worst, so
+   * this exists to let a depth claim be looked at rather than argued about.
+   */
+  section: SectionState
+  /** `C`. Keeps where the plane was, so a glance away and back is free. */
+  toggleSection: () => void
+  setSectionAxis: (axis: Axis) => void
+  setSectionDepth: (depth: number) => void
+  flipSection: () => void
+  setSectionDragging: (dragging: boolean) => void
+
   select: (id: string | null, mode?: SelectMode) => void
   selectAll: () => void
   beginMarquee: (point: Point2, selecting: boolean) => void
@@ -193,6 +206,31 @@ interface State {
   nudge: (dCol: number, dRow: number) => void
   removeSelected: () => void
   clear: () => void
+}
+
+/**
+ * The cross-section overlay: one clipping plane, and where it sits.
+ *
+ * Ephemeral on purpose. It is not in the document, not in the share link and
+ * not in localStorage — the document schema is versioned and validated, and
+ * view state has no business riding a share link into someone else's session.
+ */
+export interface SectionState {
+  readonly on: boolean
+  readonly axis: Axis
+  /** Where the plane cuts, in wall-space mm along `axis`. */
+  readonly depth: number
+  /**
+   * Which half is kept. Fixed per axis and flipped only by hand — never
+   * derived from where the camera is, or the picture would change as you
+   * orbited and stop being a measurement.
+   */
+  readonly flipped: boolean
+  /**
+   * Set while the margin handle is held, so OrbitControls stands down — the
+   * same job `dragging` and `marquee.selecting` already do in `Scene`.
+   */
+  readonly dragging: boolean
 }
 
 export type DragSubject =
@@ -269,6 +307,20 @@ export const useStore = create<State>((set, get) => ({
   marquee: null,
   assemblies: [],
   dismissedIssues: [],
+
+  // Opens on Y at 0: the plane of the board's front face, where the wall
+  // side and the room part company.
+  section: { on: false, axis: 'y', depth: 0, flipped: false, dragging: false },
+  // Toggling off mid-drag would otherwise leave the camera standing down
+  // with no handle left to release it.
+  toggleSection: () =>
+    set((s) => ({ section: { ...s.section, on: !s.section.on, dragging: false } })),
+  // Depth carries across an axis change. It is one number by design, and
+  // resetting it would throw away a place the user had swept to.
+  setSectionAxis: (axis) => set((s) => ({ section: { ...s.section, axis } })),
+  setSectionDepth: (depth) => set((s) => ({ section: { ...s.section, depth } })),
+  flipSection: () => set((s) => ({ section: { ...s.section, flipped: !s.section.flipped } })),
+  setSectionDragging: (dragging) => set((s) => ({ section: { ...s.section, dragging } })),
 
   dragging: null,
   hoverSlot: null,

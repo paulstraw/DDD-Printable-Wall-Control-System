@@ -5,6 +5,8 @@ import { useModifier } from '../useModifier'
 import { DragGhost, DropTarget, Marquee } from './DropTarget'
 import { Pegboard } from './Pegboard'
 import { PlacedParts } from './PlacedParts'
+import { SectionClip } from './SectionClip'
+import { SectionHandle } from './SectionHandle'
 import { useFaceOn } from './useFaceOn'
 
 function CameraRig({ board }: { board: Board }) {
@@ -22,7 +24,9 @@ export function Scene({ board }: { board: Board }) {
   // box-select has started: OrbitControls claims the pointerdown before
   // React can react to it. See useModifier.
   const selecting = useModifier()
-  const busy = useStore((s) => s.dragging !== null || s.marquee?.selecting === true)
+  const busy = useStore(
+    (s) => s.dragging !== null || s.marquee?.selecting === true || s.section.dragging,
+  )
 
   return (
     <>
@@ -36,6 +40,8 @@ export function Scene({ board }: { board: Board }) {
       <PlacedParts />
       <DragGhost />
       <Marquee />
+      <SectionClip />
+      <SectionHandle board={board} />
 
       <OrbitControls
         makeDefault
