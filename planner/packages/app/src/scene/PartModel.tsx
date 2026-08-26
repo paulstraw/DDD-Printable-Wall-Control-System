@@ -82,6 +82,7 @@ export function PartModel({
   row,
   orientation,
   selected,
+  pickable = true,
   onSelect,
 }: {
   part: CatalogPart
@@ -89,6 +90,15 @@ export function PartModel({
   row: number
   orientation: Orientation
   selected: boolean
+  /**
+   * False once the section has cut this part away entirely.
+   *
+   * Dropping the handler rather than hiding the part is what makes this
+   * work: r3f only raycasts objects that carry one, so an unpickable part
+   * leaves the interaction set altogether and the press falls through to
+   * the wall behind it — which is what a click on nothing should do.
+   */
+  pickable?: boolean
   onSelect: (additive: boolean) => void
 }) {
   const oriented = orientedFor(part, orientation)
@@ -98,14 +108,18 @@ export function PartModel({
   return (
     <group
       position={[origin.x, origin.y, origin.z]}
-      onPointerDown={(e) => {
-        e.stopPropagation()
+      onPointerDown={
+        pickable
+          ? (e) => {
+              e.stopPropagation()
         // Shift and Cmd/Ctrl both add to the selection — the two conventions
         // people arrive with, and neither is worth being pedantic about.
         // Read from the same place the box-select and the camera read it,
         // rather than off this event, so the three cannot disagree.
-        onSelect(modifierHeld())
-      }}
+              onSelect(modifierHeld())
+            }
+          : undefined
+      }
     >
       <Suspense fallback={null}>
         <group rotation={[rotationX, 0, 0]} position={[0, 0, lift]}>

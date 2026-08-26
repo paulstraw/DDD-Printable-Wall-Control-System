@@ -24,6 +24,7 @@ import {
   slotRowCount,
   uniqueAssemblyName,
 } from '@ddd-planner/core'
+import { hiddenBySection, sectionPlane } from './scene/section'
 
 export interface CatalogPart {
   id: string
@@ -268,14 +269,30 @@ function assemblyLanding(
   return landed.map((p) => ({ ...p, col: p.col + move.dCol, row: p.row + move.dRow }))
 }
 
-/** The wall-face rectangle each placement covers, for marquee hit-testing. */
-function footprints(state: Pick<State, 'placements' | 'catalog'>) {
+/**
+ * The wall-face rectangle each placement covers, for marquee hit-testing.
+ *
+ * A part the section has cut away entirely is left out. Sweeping a band over
+ * a part you cannot see and selecting it is the same defect as clicking one —
+ * worse, really, since nothing on screen says it happened.
+ */
+function footprints(state: Pick<State, 'placements' | 'catalog' | 'section'>) {
+  const plane = state.section.on
+    ? sectionPlane(state.section.axis, state.section.depth, state.section.flipped)
+    : null
   const out: { id: string; rect: ReturnType<typeof footprintRect> }[] = []
   for (const placement of state.placements) {
     const part = partById(state.catalog, placement.partId)
     if (!part) continue
     const oriented = orientedFor(part, placement.orientation)
     const origin = placementOrigin(oriented.rule, part.h, placement)
+    const { x, y, z } = oriented.sizeMm
+    if (
+      plane !== null &&
+      hiddenBySection({ min: origin, max: { x: origin.x + x, y: origin.y + y, z: origin.z + z } }, plane)
+    ) {
+      continue
+    }
     out.push({ id: placement.id, rect: footprintRect(origin, oriented.sizeMm) })
   }
   return out
