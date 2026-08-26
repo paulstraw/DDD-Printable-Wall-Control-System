@@ -253,6 +253,9 @@ describe('the indexer, end to end', () => {
     ) as { name: string; orientations: { flat: OrientedShape } }[]
 
     for (const p of tabbed) {
+      // Shelf-only families never hang in the wall plane, so there is no
+      // flat rule to check the socket against.
+      if (!p.orientations.flat) continue
       const { rule, sizeMm } = p.orientations.flat
       if (sizeMm.y >= 6.15) expect(rule.frontFaceYMm + sizeMm.y, `${p.name} back face`).toBeCloseTo(-4.05, 1)
       else expect(rule.frontFaceYMm, `${p.name} front face`).toBeCloseTo(-10.2, 1)
@@ -268,11 +271,14 @@ describe('the indexer, end to end', () => {
     // 18.7 mm flat both hang correctly off the same slot.
     expect(by('3x0 Flat Left').orientations.flat.rule.frontFaceYMm).toBeCloseTo(-10.2, 1)
 
-    // The whole point, on the part that made it visible: 87.2 mm of pliers
-    // rack, of which only the 6.15 mm plate is the mounting interface.
-    const rack = by('4x4 Large Pliers Rack').orientations.flat
-    expect(rack.sizeMm.y).toBeCloseTo(87.2, 1)
-    expect(rack.rule.frontFaceYMm).toBeCloseTo(-4.05 - 87.2, 1)
+    // The part that made the depth datum visible in the first place: 87.2 mm
+    // of pliers rack on a 6.15 mm plate. It is a shelf now, so what pins it is
+    // no longer the socket but the arm pocket — and a shelf's back edge cannot
+    // reach the panel, because the first pocket is 24.05 out from the tang and
+    // the first rib is 7.70 in from the edge. 7.85 mm proud, every time.
+    const rack = by('4x4 Large Pliers Rack').orientations.shelf
+    expect(rack.rule.frontFaceYMm + rack.sizeMm.y, 'rack back edge').toBeCloseTo(-7.85, 1)
+    expect(rack.rule.matesByHeight, 'a shelf does not mate by height').toBe(false)
 
     // A Gridfinity frame is the exception: rotated a quarter turn out of the
     // wall, it is a shelf, so it projects by what the filename calls its
@@ -331,13 +337,24 @@ describe('the indexer, end to end', () => {
     expect(blank.sizeMm.z).toBeCloseTo(101.4, 1)
     expect(blank.orientations.flat.rule.matesByHeight).toBe(true)
 
-    // Nothing else in the library is rotated out of the wall plane.
+    // Three families are rotated out of the wall plane, and only three:
+    // Gridfinity, the tool hooks and the U hooks. All three are trays — a
+    // frame holds bins standing up, a hammer hook holds a hammer by its
+    // handle, a U hook is a cradle — and none of them holds anything laid
+    // flat against the panel. Upstream says so of the U hooks outright:
+    // "useful for mounting horizontally between side pieces to hang tools".
     const rotated = index.parts
       .filter((p: { orientations: Record<string, { rule: { matesByHeight: boolean } }> }) =>
         Object.values(p.orientations).every((o) => !o.rule.matesByHeight),
       )
       .map((p: { family: string }) => p.family)
-    expect(new Set(rotated)).toEqual(new Set(['centerpieces/gridfinity']))
+    expect(new Set(rotated)).toEqual(
+      new Set([
+        'centerpieces/gridfinity',
+        'centerpieces/tool_hooks',
+        'centerpieces/u_hooks',
+      ]),
+    )
   })
 
   it('gives a centerpiece the columns it spans and a sidepiece one', async () => {

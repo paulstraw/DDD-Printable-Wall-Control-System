@@ -458,7 +458,16 @@ describe('the arm socket, re-derived from the meshes', () => {
       // Needs at least three bands for the pitch to mean anything, and the
       // first part alphabetically is a 1x1 with one.
       const parts = partsIn(family)
-      const { name } = parts.find((x) => (x.parsed.h ?? 0) >= 3) ?? parts[0]!
+      // A family may name the part to derive from. Tool hooks need to: the
+      // probe reads solidity at the very edge, and a rack that runs the full
+      // width of its plate reads solid the whole way up, hiding a lattice
+      // that is there. Same reason the family carries `perPart`.
+      const { name } =
+        (family.shelfProbe !== undefined
+          ? parts.find((x) => x.parsed.filename === family.shelfProbe)
+          : undefined) ??
+        parts.find((x) => (x.parsed.h ?? 0) >= 3) ??
+        parts[0]!
       const { tris, size } = recentred(family.dir, name)
 
       // Probe at the very edge, inside the band's own thickness. A ribbed
@@ -516,18 +525,23 @@ describe('the Phase-1 joint, built from the shipped rules', () => {
   })
 
   // A spacer is nothing but its mounting plate, so seating one says nothing
-  // about which of its two faces the socket holds. A tool hook is that same
-  // plate carrying 19 mm of chisel rack, and anchoring it by the front face
-  // drove the plate 19 mm through the panel — the socket kept the tab it was
-  // handed, and the rack was the part left standing behind the wall.
-  const CHISELS = {
-    family: 'centerpieces/tool_hooks',
-    file: 'Centerpieces/Tool_hooks/3x3 Mayhew Tools 61020 Set - Chisels.stl',
-    name: '3x3 Mayhew Tools 61020 Set - Chisels',
+  // about which of its two faces the socket holds. A Honeycomb panel is that
+  // same plate carrying its cells, and anchoring it by the front face drove
+  // the plate through the panel — the socket kept the tab it was handed, and
+  // what the part carried was left standing behind the wall.
+  //
+  // This used to be a chisel rack, which made the same point with 19 mm
+  // rather than 1.85. Tool hooks are shelves now — a tray laid flat holds
+  // nothing — so the invariant needs a flat family that still carries
+  // something, and Honeycomb is one.
+  const CARRIER = {
+    family: 'centerpieces/honeycomb_storage_wall',
+    file: 'Centerpieces/Honeycomb_Storage_Wall/4x4 Honeycomb Storage Wall.stl',
+    name: '4x4 Honeycomb Storage Wall',
   }
 
   it('seats a centerpiece that projects exactly where a spacer seats', () => {
-    const hook = assessJoint(buildPhase1Joint(3, 2, 127, CHISELS))
+    const hook = assessJoint(buildPhase1Joint(4, 2, 127, CARRIER))
     const spacer = assessJoint(buildPhase1Joint(3))
 
     expect(hook.intoLeftSocket.y).toBeCloseTo(spacer.intoLeftSocket.y, 3)
@@ -537,10 +551,10 @@ describe('the Phase-1 joint, built from the shipped rules', () => {
   })
 
   it('leaves everything a centerpiece carries in front of the panel', () => {
-    const { centre } = buildPhase1Joint(3, 2, 127, CHISELS)
-    // 25.2 deep: 6.15 of plate, and 19.05 of rack standing off the wall.
-    expect(centre.bounds.max.y - centre.bounds.min.y).toBeCloseTo(25.2, 1)
+    const { centre } = buildPhase1Joint(4, 2, 127, CARRIER)
+    // 8.0 deep: 6.15 of plate, and 1.85 of cell standing off the wall.
+    expect(centre.bounds.max.y - centre.bounds.min.y).toBeCloseTo(8.0, 1)
     expect(centre.bounds.max.y, 'nothing behind the panel').toBeLessThan(0)
-    expect(centre.bounds.min.y, 'the rack stands out in front').toBeCloseTo(-29.25, 1)
+    expect(centre.bounds.min.y, 'the cells stand out in front').toBeCloseTo(-12.05, 1)
   })
 })
