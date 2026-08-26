@@ -23,7 +23,9 @@ import {
   type FamilyRule,
   PLANNER_ROOT,
   REPO_ROOT,
+  type Span,
   centerpieceFrontFaceY,
+  tabSpanY,
   loadFamilies,
   loadOverrides,
   resolvedFamilies,
@@ -96,7 +98,7 @@ export interface PartRow {
 function placementFor(
   family: Record<string, unknown>,
   parsed: { h: number | null; w: number | null; variant: string | null },
-  placed: { widthMm: number; depthMm: number },
+  placed: { widthMm: number; depthMm: number; tabY?: Span | null },
 ): PlacementRule {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rule = family as any
@@ -119,7 +121,7 @@ function placementFor(
   return {
     occupiesColumns: columnsFor(parsed),
     offsetFromSlotXMm: offsetFor(parsed, placed.widthMm),
-    frontFaceYMm: centerpieceFrontFaceY(family as FamilyRule, placed.depthMm),
+    frontFaceYMm: centerpieceFrontFaceY(family as FamilyRule, placed.depthMm, placed.tabY),
     bottomBelowSlotCenterMm: rule.anchor.bottomBelowSlotCenterMm,
     matesByHeight: true,
   }
@@ -129,6 +131,20 @@ const columnsFor = (parsed: { w: number | null }) => Math.max(1, Math.round(pars
 
 const offsetFor = (parsed: { w: number | null }, widthMm: number) =>
   (COLUMN_PITCH_MM * columnsFor(parsed) - widthMm) / 2
+
+/**
+ * How far a flat-shipping plate turns to become a shelf.
+ *
+ * +90 rather than -90 because the asset it turns is itself turned: the
+ * centerpiece map puts the plate's front face out of the wall, and tipping
+ * *that* forward would show the shelf its own underside. The two numbers are
+ * the same quarter turn seen from either side of a 180 - change one and the
+ * other has to move with it.
+ *
+ * What has to stay true is the face carrying the ribs ending up underneath,
+ * because that is the face the arm pocket holds.
+ */
+export const SHELF_TURN_DEG = 90
 
 interface ShelfSpec {
   readonly bandFloorMm: number
@@ -146,7 +162,7 @@ interface ShelfSpec {
 function orientationsFor(
   family: Record<string, unknown>,
   parsed: { h: number | null; w: number | null; variant: string | null },
-  placed: { widthMm: number; depthMm: number; heightMm: number },
+  placed: { widthMm: number; depthMm: number; heightMm: number; tabY: Span | null },
   armSocket: ArmSocket,
 ): Partial<Record<Orientation, OrientedPlacement>> {
   const declared = (family.orientations as Orientation[] | undefined) ?? ['flat']
@@ -184,7 +200,7 @@ function orientationsFor(
         matesByHeight: false,
       },
       sizeMm: alreadyTurned ? measured : { x: placed.widthMm, y: placed.heightMm, z: placed.depthMm },
-      rotateXDeg: alreadyTurned ? 0 : -90,
+      rotateXDeg: alreadyTurned ? 0 : SHELF_TURN_DEG,
     }
   }
 
@@ -423,10 +439,13 @@ export async function runIndexer(outDir = DEFAULT_OUT_DIR) {
       const widthMm = size.max.x - size.min.x
       const depthMm = size.max.y - size.min.y
       const heightMm = size.max.z - size.min.z
+      // The ear is measured off the placed mesh, so it follows the axis map
+      // rather than restating it. See `tabSpanY`.
+      const tabY = tabSpanY(mesh, placed.matrix)
       const orientations = orientationsFor(
         family,
         parsed,
-        { widthMm, depthMm, heightMm },
+        { widthMm, depthMm, heightMm, tabY },
         armSocket,
       )
       const byOrientation = fastenersByOrientationFor(

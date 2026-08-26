@@ -108,16 +108,95 @@ export function loadOverrides(): Map<string, PartOverride> {
  * because a tool hook family has no rule for what its parts hold. A part
  * thinner than the plate projects nothing.
  */
-export function centerpieceFrontFaceY(rule: FamilyRule, depthMm: number): number {
+export interface Span {
+  readonly min: number
+  readonly max: number
+}
+
+/**
+ * The tab ear, in wall Y, relative to the part's own front face.
+ *
+ * The ear is the only place a centerpiece reaches its full width, so that is
+ * how it is found: the layer standing proud of the plate on both sides. No
+ * threshold to tune and nothing declared.
+ *
+ * It cannot tell an ear from a side face that happens to run the full depth,
+ * and does not try - a family with no ear gets its whole plate back rather
+ * than null. Measured: the spacers and Honeycomb all answer 2.80, the
+ * Retainers answer their entire 6.35, and a U hook answers 59.60 of its 76.
+ * Only the tabbed families feed this into placement, so the last two are
+ * currently harmless rather than correct.
+ *
+ * Measured rather than declared because the ear's offset within the plate is
+ * what a turn moves. A number written down here would have gone on being
+ * right-looking and wrong after the axis map changed, which is exactly what
+ * happened to the note this replaces.
+ */
+export function tabSpanY(mesh: StlMesh, matrix: readonly number[]): Span | null {
+  let lo = Infinity
+  let hi = -Infinity
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+
+  const n = mesh.positions.length
+  const wall = new Float64Array(n)
+  for (let i = 0; i < n; i += 3) {
+    const p = applyMatrix(matrix, {
+      x: mesh.positions[i] as number,
+      y: mesh.positions[i + 1] as number,
+      z: mesh.positions[i + 2] as number,
+    })
+    wall[i] = p.x
+    wall[i + 1] = p.y
+    wall[i + 2] = p.z
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+  }
+
+  // A hair of slack, because a chamfer meets the extreme face at a vertex the
+  // exporter rounded.
+  const EDGE_MM = 0.01
+  for (let i = 0; i < n; i += 3) {
+    const x = wall[i] as number
+    if (x > minX + EDGE_MM && x < maxX - EDGE_MM) continue
+    const y = wall[i + 1] as number
+    if (y < lo) lo = y
+    if (y > hi) hi = y
+  }
+
+  if (!Number.isFinite(lo) || hi - lo <= 0) return null
+  return { min: lo - minY, max: hi - minY }
+}
+
+/**
+ * Where a centerpiece's front face goes.
+ *
+ * A tabbed part is located by its tab: the ear is what the socket closes on,
+ * so the ear goes in the middle of the socket and the rest of the part
+ * follows. That is the whole rule, and it holds whichever way round the part
+ * is drawn - which the old rule did not, because it located the part by a
+ * face and assumed the ear sat a fixed distance behind it.
+ *
+ * A tabless family is not held by a plate in a groove at all: a pin bridges
+ * its notch to the socket, and that notch is centred in its own thickness, so
+ * a turn does not move it. Those keep the front-face datum.
+ */
+export function centerpieceFrontFaceY(
+  rule: FamilyRule,
+  depthMm: number,
+  tab?: Span | null,
+): number {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r = rule as any
-  // A tabless family is not held by a plate in a groove at all: a pin bridges
-  // its notch to the socket, and that notch is centred in its own thickness.
-  // Its whole body is the interface, so there is nothing standing in front.
-  const projection =
-    r.tabs?.present === false
-      ? 0
-      : Math.max(0, depthMm - (r.anchor.depth.plateThicknessMm as number))
+  const tabbed = r.tabs?.present !== false
+
+  if (tabbed && tab) {
+    return (r.anchor.depth.socketCentreYMm as number) - (tab.min + tab.max) / 2
+  }
+
+  const projection = tabbed ? Math.max(0, depthMm - (r.anchor.depth.plateThicknessMm as number)) : 0
   return (r.anchor.depth.frontFaceYMm as number) - projection
 }
 
@@ -230,7 +309,6 @@ export function placeCenterpiece(opts: {
   leftSlotX: number
   widthUnits: number
   bottomZ: number
-  tabThicknessMm: number
 }): Placed {
   const mesh = readStlFile(join(REPO_ROOT, opts.file))
   const src = boundsOf(mesh)
@@ -239,10 +317,11 @@ export function placeCenterpiece(opts: {
 
   const trial = placeBounds(src, opts.map, { x: 0, y: 0, z: 0 })
   const depthMm = trial.bounds.max.y - trial.bounds.min.y
+  const tab = tabSpanY(mesh, trial.matrix)
 
   const final = placeBounds(src, opts.map, {
     x: opts.leftSlotX + (span - width) / 2,
-    y: centerpieceFrontFaceY(opts.rule, depthMm),
+    y: centerpieceFrontFaceY(opts.rule, depthMm, tab),
     z: opts.bottomZ,
   })
   return {
@@ -250,7 +329,10 @@ export function placeCenterpiece(opts: {
     mesh,
     matrix: final.matrix,
     bounds: final.bounds,
-    tabs: through(final.matrix, tangLayer(src, opts.tabThicknessMm)),
+    tabs: tab
+      ? { min: { ...final.bounds.min, y: final.bounds.min.y + tab.min },
+          max: { ...final.bounds.max, y: final.bounds.min.y + tab.max } }
+      : undefined,
   }
 }
 
@@ -308,7 +390,6 @@ export function buildPhase1Joint(widthUnits = 3, col = 2, slotZ = 127, centre?: 
     leftSlotX: slotX(col),
     widthUnits,
     bottomZ: slotZ - b.anchor.bottomBelowSlotCenterMm.odd,
-    tabThicknessMm: b.tabs?.thicknessMm ?? 2.4,
   })
 
   return { left, centre: middle, right }

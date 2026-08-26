@@ -555,6 +555,10 @@ describe('the Phase-1 joint, built from the shipped rules', () => {
     // 8.0 deep: 6.15 of plate, and 1.85 of cell standing off the wall.
     expect(centre.bounds.max.y - centre.bounds.min.y).toBeCloseTo(8.0, 1)
     expect(centre.bounds.max.y, 'nothing behind the panel').toBeLessThan(0)
-    expect(centre.bounds.min.y, 'the cells stand out in front').toBeCloseTo(-12.05, 1)
+    // -12.3 rather than the -12.05 the front-face datum used to give: seating
+    // the ear in the middle of the socket moves every tabbed centerpiece the
+    // 0.25 mm the old rule was out by. Closer to the groove it sits in, not
+    // further.
+    expect(centre.bounds.min.y, 'the cells stand out in front').toBeCloseTo(-12.3, 1)
   })
 })

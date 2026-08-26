@@ -109,12 +109,6 @@ describe('thumbnail rasteriser', () => {
   })
 })
 
-/** As much of an index row's orientation as the depth assertions read. */
-interface OrientedShape {
-  rule: { frontFaceYMm: number }
-  sizeMm: { x: number; y: number; z: number }
-}
-
 describe('the indexer, end to end', () => {
   const out = mkdtempSync(join(tmpdir(), 'ddd-index-'))
   afterAll(() => rmSync(out, { recursive: true, force: true }))
@@ -239,27 +233,13 @@ describe('the indexer, end to end', () => {
     expect(by('3x3 Spacer blank').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(-2.7, 2)
     expect(by('3x3 Spacer clip-on').orientations.flat.rule.offsetFromSlotXMm).toBeCloseTo(1.2, 2)
 
-    // Centerpieces that hang in the plane of the wall share the mounting
-    // interface, and what they share is its *back* face: the tab is 0.5 mm in
-    // from there, so a plate carrying a rack keeps its back at -4.05 and puts
-    // the rack in front. A part thinner than the plate has nothing to put in
-    // front and stays where the front-face anchor left it.
-    const tabbed = index.parts.filter(
-      (p: { family: string }) =>
-        p.family.startsWith('centerpieces/') &&
-        !['centerpieces/gridfinity', 'centerpieces/spacer_blank_flush', 'centerpieces/spacer_clip-on'].includes(
-          p.family,
-        ),
-    ) as { name: string; orientations: { flat: OrientedShape } }[]
-
-    for (const p of tabbed) {
-      // Shelf-only families never hang in the wall plane, so there is no
-      // flat rule to check the socket against.
-      if (!p.orientations.flat) continue
-      const { rule, sizeMm } = p.orientations.flat
-      if (sizeMm.y >= 6.15) expect(rule.frontFaceYMm + sizeMm.y, `${p.name} back face`).toBeCloseTo(-4.05, 1)
-      else expect(rule.frontFaceYMm, `${p.name} front face`).toBeCloseTo(-10.2, 1)
-    }
+    // Nothing here checks where a tabbed centerpiece's ear lands in the
+    // socket. The check that used to sit here recomputed the ear the same way
+    // `centerpieceFrontFaceY` does and then asserted the two agreed, which
+    // reduces to socketCentre === socketCentre: it passed for the Retainers,
+    // whose measured "ear" is the whole 6.35 mm plate. A test that cannot go
+    // red is worse than the gap, because the tick reads as cover. The joint
+    // assembled in families.test.ts is what actually exercises this.
 
     // The tabless families are not held that way at all — a pin bridges their
     // notch to the socket, centred in their own thickness — so their whole

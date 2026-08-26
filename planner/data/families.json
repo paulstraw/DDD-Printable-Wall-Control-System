@@ -136,7 +136,18 @@
       "kind": "centerpiece",
       "$comment": "Height is 25.4h - 0.2 in every centerpiece family that has a rule at all. Families differ in width formula, thickness, and whether they carry tabs.",
 
-      "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
+      "printToWall": { "x": "-x", "y": "+z", "z": "+y" },
+      "printToWallNote": [
+        "A 180 degree turn about wall Z from the map this family shipped with,",
+        "which had every centerpiece facing into the panel rather than out of",
+        "it. About Z rather than about X on purpose: both turns swap front for",
+        "back, but only Z leaves up pointing up, so a hook still opens upward.",
+        "",
+        "The five spacer plates are unchanged by the difference - they are",
+        "two-fold symmetric face-on, so the two turns land them identically -",
+        "but a hook is not, and one of the two would print the library upside",
+        "down."
+      ],
 
       "size": {
         "heightMm": { "perUnitMm": 25.4, "constantMm": -0.2 }
@@ -149,6 +160,20 @@
         "depth": {
           "frontFaceYMm": -10.2,
           "note": "= -(18.7 - 8.5): the depth of the mounting interface itself, not of whatever sidepiece happens to hold it. This is what seats the tab in the socket.",
+          "socketCentreYMm": -6.2,
+          "socketCentreNote": [
+            "The middle of the vertical socket groove, in wall Y. Measured off",
+            "the Flats: the groove runs -8.30 to -4.10 once a Flat is placed by",
+            "its own rule, and every sidepiece cuts the same interface.",
+            "",
+            "This is what a tabbed centerpiece is located by. The part's ear is",
+            "measured off its own mesh and put here; the rest of the part",
+            "follows. Locating by a face instead only worked while the ear's",
+            "offset within the plate stayed put, and it did not.",
+            "",
+            "packages/indexer/test/families.test.ts re-measures the groove and",
+            "checks this number, so it cannot drift from the meshes."
+          ],
           "plateThicknessMm": 6.15,
           "plateThicknessNote": [
             "The mounting plate, and the reason the anchor above can be written",
@@ -281,7 +306,7 @@
         "widthMm": { "perUnitMm": 25.4, "constantMm": 5.4 },
         "thicknessMm": { "constant": 6.15 }
       },
-      "tabs": { "present": true, "overhangPerSideMm": 2.7, "heightMm": 60.6, "thicknessMm": 2.4 },
+      "tabs": { "present": true, "overhangPerSideMm": 2.7, "heightMm": 60.6 },
       "fasteners": []
     },
     {
@@ -422,6 +447,19 @@
       "id": "centerpieces/honeycomb_storage_wall",
       "archetype": "centerpiece",
       "dir": "Centerpieces/Honeycomb_Storage_Wall",
+      "printToWall": { "x": "+x", "y": "-z", "z": "+y" },
+      "printToWallNote": [
+        "Back to the map the centerpiece archetype used to carry, because this",
+        "family carries something. Every centerpiece has the same 2.80 mm tab",
+        "ear 0.5 mm in from its plate's back face - measured, spacers and hooks",
+        "alike - so the plate is the back 6.15 mm and whatever the part holds",
+        "is the rest, in front of it. Turning the archetype puts that rack",
+        "behind the ear and therefore inside the panel, which is what",
+        "families.test.ts means by 'nothing behind the panel'.",
+        "",
+        "A family that is nothing but the plate has no such stake and takes the",
+        "archetype's turn. That is the whole difference."
+      ],
       "label": "Honeycomb storage wall",
       "dimensionOrder": "height x width",
       "parts": 3,

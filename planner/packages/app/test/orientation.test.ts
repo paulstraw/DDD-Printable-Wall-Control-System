@@ -27,8 +27,14 @@ const flat: OrientedPlacement = {
 const shelf: OrientedPlacement = {
   rule: { ...RULE, frontFaceYMm: -83.8, bottomBelowSlotCenterMm: { odd: -7.45, even: -7.45 }, matesByHeight: false },
   sizeMm: { x: 81.6, y: 76, z: 6.15 },
-  rotateXDeg: -90,
+  rotateXDeg: 90,
 }
+
+/** The same shelf turned the other way, which is what the indexer used to emit. */
+const shelfBack: OrientedPlacement = { ...shelf, rotateXDeg: -90 }
+
+/** A part turned to face the other way, which is still flat against the wall. */
+const turnedX: OrientedPlacement = { ...flat, rotateXDeg: 180 }
 
 function part(id: string, orientations: CatalogPart['orientations']): CatalogPart {
   return {
@@ -68,7 +74,7 @@ const catalog: CatalogFile = {
 
 describe('orientedFor', () => {
   it('gives the asked-for orientation when the part has it', () => {
-    expect(orientedFor(catalog.parts[0]!, 'shelf').rotateXDeg).toBe(-90)
+    expect(orientedFor(catalog.parts[0]!, 'shelf').rotateXDeg).toBe(90)
     expect(orientedFor(catalog.parts[0]!, 'flat').rotateXDeg).toBe(0)
   })
 
@@ -145,16 +151,19 @@ describe('assetTransform', () => {
    * for anything turned.
    */
   const drawnBox = (oriented: OrientedPlacement, origin: { x: number; y: number; z: number }) => {
-    const { rotationX, lift } = assetTransform(oriented)
+    const { rotationX, offset } = assetTransform(oriented)
     const s = oriented.sizeMm
+    // The asset's own box. Only a quarter turn swaps depth for height — a
+    // half turn negates both and leaves the extents where they were, which
+    // is exactly the case the old transform got wrong.
     const asShipped =
-      oriented.rotateXDeg === 0
-        ? new Vector3(s.x, s.y, s.z)
-        : new Vector3(s.x, s.z, s.y)
+      Math.abs(oriented.rotateXDeg) === 90
+        ? new Vector3(s.x, s.z, s.y)
+        : new Vector3(s.x, s.y, s.z)
 
     const matrix = new Matrix4()
       .makeTranslation(origin.x, origin.y, origin.z)
-      .multiply(new Matrix4().makeTranslation(0, 0, lift))
+      .multiply(new Matrix4().makeTranslation(...offset))
       .multiply(new Matrix4().makeRotationX(rotationX))
 
     return new Box3(new Vector3(0, 0, 0), asShipped).applyMatrix4(matrix)
@@ -180,8 +189,24 @@ describe('assetTransform', () => {
   it('lands a flat part on the box the ghost drew', () => sits(flat))
   it('lands a shelf on the box the ghost drew', () => sits(shelf))
 
-  it('lifts a turned part by its thickness, not its reach', () => {
-    expect(assetTransform(shelf).lift).toBe(shelf.sizeMm.z)
-    expect(assetTransform(flat).lift).toBe(0)
+  // Both directions, because which one the indexer emits follows the
+  // centerpiece axis map and has already changed once. A turn that only
+  // works one way round is a turn waiting to put every shelf a part-height
+  // in front of the wall.
+  it('lands a shelf turned the other way on that same box', () => sits(shelfBack))
+
+  // A half turn negates two axes and leaves the extents alone, so it lands on
+  // the same box as the unturned part — by a different route, which is the
+  // case a single fixed lift got wrong.
+  it('lands an X-turned part on the box the ghost drew', () => sits(turnedX))
+
+  it('puts back exactly what the turn took, whichever way it turned', () => {
+    expect(assetTransform(flat).offset).toEqual([0, 0, 0])
+    // -90 drops the asset below the floor by its own thickness; +90 swings it
+    // forward by its reach instead. Neither is a lift along one fixed axis.
+    expect(assetTransform(shelfBack).offset).toEqual([0, 0, shelf.sizeMm.z])
+    expect(assetTransform(shelf).offset).toEqual([0, shelf.sizeMm.y, 0])
+    // A half turn sends both of the other axes negative, and both come back.
+    expect(assetTransform(turnedX).offset).toEqual([0, flat.sizeMm.y, flat.sizeMm.z])
   })
 })

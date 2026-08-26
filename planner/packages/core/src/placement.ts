@@ -80,10 +80,11 @@ export interface OrientedPlacement {
   /**
    * Rotation about the wall X axis applied to the asset, in degrees.
    *
-   * Assets ship rotated for `flat` with their minimum corner at the origin,
-   * so this is 0 there and -90 for a shelf — the plate tips forward until the
-   * face carrying its ribs is underneath, which is the face the arm pocket
-   * holds it by.
+   * Assets ship with their minimum corner at the origin, in whichever pose
+   * their family's axis map bakes. A plate that ships flat tips a quarter
+   * turn to become a shelf, until the face carrying its ribs is underneath —
+   * the face the arm pocket holds it by. A family whose map already bakes
+   * the turned pose has nothing left to do and says 0.
    */
   readonly rotateXDeg: number
 }
