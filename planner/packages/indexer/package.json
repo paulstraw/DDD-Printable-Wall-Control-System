@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "spike": "tsx src/spike.ts",
-    "audit": "tsx src/audit-cli.ts"
+    "audit": "tsx src/audit-cli.ts",
+    "playground": "tsx src/playground.ts"
   },
   "dependencies": {
     "@ddd-planner/core": "*",
