@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useStore } from './store'
 
-function isTyping(target: EventTarget | null): boolean {
+/** Whether the event landed in something the user is typing into. */
+export function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el) return false
   return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable

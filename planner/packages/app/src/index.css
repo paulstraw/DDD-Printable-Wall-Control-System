@@ -159,6 +159,13 @@ kbd {
  * peers, and with a mixed selection neither is pressed, which a single button
  * has no way to say.
  */
+/*
+ * Copy and cut, in the hint line beside the selection they act on — the same
+ * place and for the same reason as the flat/shelf toggle. Both are as
+ * selection-dependent as nudge and remove, and neither is chrome anyone needs
+ * looking at while nothing is selected.
+ */
+.selection-actions,
 .orientation-toggle {
   display: inline-flex;
   align-items: center;
@@ -167,6 +174,7 @@ kbd {
   vertical-align: middle;
 }
 
+.selection-actions button,
 .orientation-toggle button {
   font: inherit;
   font-size: 0.72rem;

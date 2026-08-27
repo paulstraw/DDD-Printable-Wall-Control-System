@@ -4,8 +4,10 @@ import { BomPanel } from './bom/BomPanel'
 import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
 import { partById, useStore } from './store'
+import { useClipboard } from './useClipboard'
 import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
+import { CopyCut, PasteButton } from './ui/Clipboard'
 import { EmptyState } from './ui/EmptyState'
 import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
@@ -17,6 +19,7 @@ import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
   useKeyboard()
+  useClipboard()
   const [restoreNote, dismissRestoreNote] = usePersistence()
 
   const board = useStore((s) => s.board)
@@ -43,6 +46,7 @@ export function App() {
         </span>
         <SaveAssembly />
         <UndoRedo />
+        <PasteButton />
         <WallActions />
         {restoreNote ? (
           <button
@@ -66,12 +70,14 @@ export function App() {
               ) : null}{' '}
               · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
               <OrientationToggle />
+              <CopyCut />
             </>
           ) : selectedIds.length > 1 ? (
             <>
               <strong>{selectedIds.length} selected</strong> · <kbd>←→↑↓</kbd> move together ·{' '}
               <kbd>Del</kbd> remove
               <OrientationToggle />
+              <CopyCut />
             </>
           ) : (
             <>

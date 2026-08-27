@@ -7,12 +7,16 @@ import {
   type Orientation,
   type OrientedPlacement,
   type SelectMode,
-  absoluteParts,
+  type AssemblyPart,
+  type PlacedRef,
   applySelection,
   clampGroupDelta,
   createAssembly,
   createBoard,
+  decodeClipping,
+  encodeClipping,
   footprintRect,
+  groupColumnSpan,
   idsInRect,
   type PlannerState,
   mergeSelection,
@@ -171,6 +175,49 @@ interface State {
   dropDrag: () => void
   cancelDrag: () => void
 
+  /**
+   * The last thing copied in this session.
+   *
+   * A fallback, not the truth. The system clipboard is the truth — see
+   * `useClipboard` — and this is consulted only where the system one cannot
+   * be read at all, which in practice means the Paste button on a phone.
+   */
+  clipping: string | null
+
+  /**
+   * The selection as clipboard text, and `null` if nothing is selected.
+   * Copying changes no placements, so a cut costs one history entry rather
+   * than two.
+   */
+  copySelection: () => string | null
+  cutSelection: () => string | null
+
+  /**
+   * Put a clipping on the wall, beside where it was taken from.
+   *
+   * Returns whether the text *was* a clipping — which is not the same as
+   * whether anything landed. A clipping naming only parts this library lacks
+   * is still ours, still consumed, and still worth a word about.
+   */
+  pasteText: (text: string) => boolean
+
+  /**
+   * Where the last paste landed, so pressing paste again marches the copy
+   * along the wall instead of piling it up on itself. Keyed by the payload,
+   * so copying something new starts over.
+   */
+  pasteAnchor: { key: string; col: number; row: number } | null
+
+  /**
+   * What the header should be saying right now — an import result, a share
+   * link, a paste that skipped something.
+   *
+   * One field rather than a string of local `useState`s, because there is one
+   * slot in the header and three components with something to put in it.
+   */
+  status: string | null
+  setStatus: (message: string | null) => void
+
   /** Groups the user has saved, newest last. */
   assemblies: Assembly[]
   /**
@@ -270,23 +317,27 @@ export type DragSubject =
   | { kind: 'assembly'; assemblyId: string }
 
 /**
- * Where an assembly's parts land when dropped on `anchor`, pulled back onto
- * the board if the drop would hang it off an edge.
+ * Where a group of parts lands when its bottom-left corner is put on
+ * `anchor`, pulled back onto the board if that would hang it off an edge.
  *
  * The correction is `clampGroupDelta` asked for a move of *zero*: the
  * allowed range for a group already hanging off the right edge is entirely
  * negative, so clamping zero into it returns exactly the shift needed to
- * bring the group back. One rule, used for both nudging and dropping.
+ * bring the group back. One rule, used for nudging, for dropping an assembly,
+ * and for pasting — which is the whole reason a clipping is stored as an
+ * assembly and not as some format of its own.
  */
-function assemblyLanding(
-  state: Pick<State, 'assemblies' | 'catalog' | 'board'>,
-  assemblyId: string,
+function landGroup(
+  state: Pick<State, 'catalog' | 'board'>,
+  parts: readonly AssemblyPart[],
   anchor: { col: number; row: number },
-): { partId: string; col: number; row: number }[] {
-  const assembly = state.assemblies.find((a) => a.id === assemblyId)
-  if (!assembly) return []
-
-  const landed = absoluteParts(assembly, anchor)
+): PlacedRef[] {
+  const landed = parts.map((p) => ({
+    partId: p.partId,
+    col: anchor.col + p.dCol,
+    row: anchor.row + p.dRow,
+    orientation: p.orientation,
+  }))
   const move = clampGroupDelta(
     landed.map((p) => ({
       col: p.col,
@@ -298,6 +349,16 @@ function assemblyLanding(
   )
 
   return landed.map((p) => ({ ...p, col: p.col + move.dCol, row: p.row + move.dRow }))
+}
+
+function assemblyLanding(
+  state: Pick<State, 'assemblies' | 'catalog' | 'board'>,
+  assemblyId: string,
+  anchor: { col: number; row: number },
+): PlacedRef[] {
+  const assembly = state.assemblies.find((a) => a.id === assemblyId)
+  if (!assembly) return []
+  return landGroup(state, assembly.parts, anchor)
 }
 
 /**
@@ -390,6 +451,9 @@ export const useStore = create<State>((set, get) => ({
   assemblies: [],
   dismissedIssues: [],
   history: EMPTY_HISTORY,
+  clipping: null,
+  pasteAnchor: null,
+  status: null,
 
   // Opens on Y at 0: the plane of the board's front face, where the wall
   // side and the room part company.
@@ -525,6 +589,81 @@ export const useStore = create<State>((set, get) => ({
     const assembly = createAssembly(`a${nextAssemblyId++}`, unique, members)
     set({ assemblies: [...assemblies, assembly] })
     return unique
+  },
+
+  setStatus: (status) => set({ status }),
+
+  copySelection: () => {
+    const { placements, selectedIds } = get()
+    if (selectedIds.length === 0) return null
+
+    // Wall order, not click order — the same reason an assembly is saved
+    // sorted. A group copied left-to-right should come back that way.
+    const chosen = new Set(selectedIds)
+    const members = placements
+      .filter((p) => chosen.has(p.id))
+      .slice()
+      .sort((a, b) => a.col - b.col || a.row - b.row)
+
+    const text = encodeClipping(members)
+    set({ clipping: text })
+    return text
+  },
+
+  cutSelection: () => {
+    const text = get().copySelection()
+    if (text !== null) get().removeSelected()
+    return text
+  },
+
+  pasteText: (text) => {
+    const clipping = decodeClipping(text)
+    if (clipping === null) return false
+
+    const state = get()
+    const { catalog } = state
+
+    // Unlike an import, which keeps parts it cannot draw so a round trip is
+    // lossless, a paste drops them. A pasted unknown is inert: nothing renders
+    // it, the marquee cannot catch it and it cannot be clicked, so it is
+    // litter you can neither see nor remove.
+    const known = catalog ? new Set(catalog.parts.map((p) => p.id)) : null
+    const usable = known ? clipping.parts.filter((p) => known.has(p.partId)) : clipping.parts
+    const skipped = clipping.parts.length - usable.length
+
+    if (usable.length === 0) {
+      set({ status: 'Nothing in that copy is in this library.' })
+      return true
+    }
+
+    // Beside itself, not on top of itself: a bay copied to be repeated along
+    // the wall should land flush to the right of the one it came from.
+    const span = groupColumnSpan(
+      usable.map((p) => ({
+        col: p.dCol,
+        row: p.dRow,
+        spanCols: spanColsOf(catalog, p.partId, p.orientation),
+      })),
+    )
+    const cascading = state.pasteAnchor?.key === text
+    const from = cascading ? state.pasteAnchor! : clipping.origin
+    const landed = landGroup(state, usable, { col: from.col + span, row: from.row })
+
+    get().addPlacements(landed)
+    set({
+      // Where it *actually* landed, which is not where it was aimed if the
+      // board edge pulled it back.
+      pasteAnchor: {
+        key: text,
+        col: Math.min(...landed.map((p) => p.col)),
+        row: Math.min(...landed.map((p) => p.row)),
+      },
+      status:
+        skipped > 0
+          ? `Pasted ${usable.length} · ${skipped} part${skipped === 1 ? '' : 's'} not in this library`
+          : null,
+    })
+    return true
   },
 
   dismissIssue: (id) =>

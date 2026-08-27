@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { decodeDocument, encodeDocument, unknownPartIds } from '@ddd-planner/core'
 import { downloadJson, shareFragmentFor } from '../persistence'
 import { useStore } from '../store'
@@ -15,7 +15,10 @@ export function WallActions() {
   const catalog = useStore((s) => s.catalog)
   const hasContent = useHasContent()
 
-  const [status, setStatus] = useState<string | null>(null)
+  // The header has one slot for a message and three components with
+  // something to put in it, so the message lives in the store.
+  const status = useStore((s) => s.status)
+  const setStatus = useStore((s) => s.setStatus)
   const file = useRef<HTMLInputElement>(null)
 
   async function share() {

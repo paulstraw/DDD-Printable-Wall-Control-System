@@ -156,6 +156,45 @@ would leave undo quietly skipping it, surfacing months later as "sometimes Ctrl+
 far back". Recording is the default and switching it off is something you write on purpose —
 which happens in exactly two places, the arrival restore and a repeating key.
 
+### A copied selection is an assembly nobody named
+
+<kbd>⌘C</kbd> / <kbd>⌘X</kbd> / <kbd>⌘V</kbd>, with buttons for the people who have no keys —
+a phone has no <kbd>⌘V</kbd>, and this planner takes touch seriously enough to have built
+tap-to-place around it.
+
+Copy adds no domain concept. `relativeParts` already rebases a group onto its own bottom-left
+corner and `absoluteParts` puts it back down on an anchor, which is exactly what a clipboard
+is; so a clipping is stored as an assembly, and pasting travels the same road as dropping a
+saved assembly from the sidebar — including the same `clampGroupDelta` correction that keeps
+it on the board. `core/clipboard.ts` adds a wire format and nothing else, sharing its row
+codec with the document so the two cannot drift apart.
+
+**A paste lands beside the original, not on top of it** — shifted right by the group's full
+column span, so a bay copied to be repeated along the wall sits flush against the one it came
+from and raises no overlap warning. Press paste again and it marches another span along. The
+span has to be measured by what the parts *cover*, not by `assemblyExtent`, which counts
+anchor columns: a single three-column plate occupies one anchor and would otherwise be pasted
+on top of itself.
+
+It goes on the clipboard as `text/plain` JSON. That is ugly if you paste it into a chat
+window, and it is the point — you *can* paste it into a chat window, and whoever reads it can
+paste it back into their planner and get your shelf. Same trade the share link makes.
+
+Three things are less obvious than they look:
+
+- **The wall does not always own <kbd>⌘C</kbd>.** There is a BOM full of part names and
+  quantities someone may want in a shopping list, and parts are selected almost all the time
+  here since anything you place arrives selected. So the wall takes the gesture only with a
+  selection, no highlighted text, and focus outside any input.
+- **Text that is not ours does nothing.** The session's own clipping is never consulted by a
+  paste *event* — only by the Paste button, and only when the system clipboard cannot be read
+  at all. Otherwise copying a URL elsewhere and pressing paste here would drop six brackets
+  you copied twenty minutes ago onto the wall.
+- **Paste skips parts this library lacks; import keeps them.** Deliberately different. Import
+  restores a document, where dropping parts is lossy and a round trip should survive. A pasted
+  unknown is inert — nothing renders it, the marquee cannot catch it, it cannot be clicked —
+  so it is litter you can neither see nor remove.
+
 ---
 
 ## Running it
@@ -167,7 +206,7 @@ npm run index     # build the part library from the STLs (~17s)
 npm run dev
 ```
 
-`npm test` runs 545 tests across the three packages. `npm run typecheck` covers all three under
+`npm test` runs 582 tests across the three packages. `npm run typecheck` covers all three under
 `strict` plus `noUncheckedIndexedAccess`.
 
 ### The spike check

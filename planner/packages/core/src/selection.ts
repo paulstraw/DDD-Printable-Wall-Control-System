@@ -111,6 +111,27 @@ export function clampGroupDelta(
   }
 }
 
+/**
+ * How many slot columns a group covers, left edge to right edge.
+ *
+ * Not `assemblyExtent`, which counts *anchor* columns and says so: a single
+ * three-column-wide part spans three columns but occupies one anchor. Offset a
+ * paste by the anchor count and the copy lands on top of the original, which
+ * is precisely the overlap the offset exists to avoid.
+ */
+export function groupColumnSpan(items: readonly GridItem[]): number {
+  if (items.length === 0) return 0
+
+  let minCol = Infinity
+  let maxRight = -Infinity
+  for (const item of items) {
+    const span = Math.max(1, Math.round(item.spanCols ?? 1))
+    minCol = Math.min(minCol, item.col)
+    maxRight = Math.max(maxRight, item.col + span - 1)
+  }
+  return maxRight - minCol + 1
+}
+
 /* ------------------------------------------------------------------ */
 /* Marquee                                                             */
 /* ------------------------------------------------------------------ */

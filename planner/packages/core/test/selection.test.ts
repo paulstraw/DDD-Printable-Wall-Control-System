@@ -3,6 +3,7 @@ import {
   applySelection,
   clampGroupDelta,
   footprintRect,
+  groupColumnSpan,
   idsInRect,
   mergeSelection,
   rectArea,
@@ -223,5 +224,45 @@ describe('footprintRect and idsInRect', () => {
       'spacer',
       'left',
     ])
+  })
+})
+
+describe('groupColumnSpan', () => {
+  it('is zero for nothing', () => {
+    expect(groupColumnSpan([])).toBe(0)
+  })
+
+  it('counts the columns a single wide part actually covers', () => {
+    // The distinction from `assemblyExtent`, which would say 1: this part
+    // occupies one anchor column and stands in three.
+    expect(groupColumnSpan([{ col: 4, row: 0, spanCols: 3 }])).toBe(3)
+  })
+
+  it('reaches from the leftmost part to the right edge of the widest', () => {
+    expect(
+      groupColumnSpan([
+        { col: 4, row: 0, spanCols: 1 },
+        { col: 4, row: 0, spanCols: 3 },
+        { col: 7, row: 0, spanCols: 1 },
+      ]),
+    ).toBe(4)
+  })
+
+  it('treats a missing or nonsense span as one column', () => {
+    expect(groupColumnSpan([{ col: 2, row: 0 }])).toBe(1)
+    expect(groupColumnSpan([{ col: 2, row: 0, spanCols: 0 }])).toBe(1)
+  })
+
+  it('is the offset that puts a copy flush beside its original', () => {
+    // A three-column bay pasted three columns right touches but does not
+    // overlap — which is the whole point of measuring it this way.
+    const bay = [
+      { col: 4, row: 0, spanCols: 1 },
+      { col: 6, row: 0, spanCols: 1 },
+    ]
+    const span = groupColumnSpan(bay)
+    expect(span).toBe(3)
+    expect(groupColumnSpan(bay.map((b) => ({ ...b, col: b.col + span })))).toBe(3)
+    expect(Math.min(...bay.map((b) => b.col + span))).toBe(7)
   })
 })

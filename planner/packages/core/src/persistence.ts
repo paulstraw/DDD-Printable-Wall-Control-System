@@ -18,7 +18,7 @@
  */
 
 import type { Assembly, AssemblyPart, PlacedRef } from './assemblies'
-import type { Orientation } from './placement'
+import { isFiniteNumber, makeDictionary, readTriple, writeRow } from './rows'
 
 export const DOCUMENT_VERSION = 1
 
@@ -55,15 +55,7 @@ export type DecodeResult =
 /* ------------------------------------------------------------------ */
 
 export function toDocument(state: PlannerState): PlannerDocument {
-  const index = new Map<string, number>()
-  const dictionary: string[] = []
-  const intern = (partId: string): number => {
-    const seen = index.get(partId)
-    if (seen !== undefined) return seen
-    index.set(partId, dictionary.length)
-    dictionary.push(partId)
-    return dictionary.length - 1
-  }
+  const { ids: dictionary, intern } = makeDictionary()
 
   const p = state.placements.map((placement) =>
     writeRow(intern(placement.partId), placement.col, placement.row, placement.orientation),
@@ -92,43 +84,6 @@ export function encodeDocument(state: PlannerState, options: { pretty?: boolean 
 /* ------------------------------------------------------------------ */
 /* Decoding — everything below treats its input as hostile              */
 /* ------------------------------------------------------------------ */
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-/** A slot index: a non-negative integer, and nothing else. */
-function isIndex(value: unknown): value is number {
-  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0
-}
-
-/**
- * Orientation codes. Absent means flat, which is what every document written
- * before shelves existed means, and what most rows still mean today.
- */
-const ORIENTATION_CODES: Record<number, Orientation> = { 0: 'flat', 1: 'shelf' }
-const CODE_FOR: Record<Orientation, number> = { flat: 0, shelf: 1 }
-
-/** The compact form of a placement, with orientation appended only when set. */
-function writeRow(index: number, a: number, b: number, orientation: Orientation): number[] {
-  // Omitting the common case is what keeps a share link the length it was:
-  // a wall with no shelves encodes to exactly the bytes it did before.
-  return orientation === 'flat' ? [index, a, b] : [index, a, b, CODE_FOR[orientation]]
-}
-
-function readTriple(
-  value: unknown,
-  dictSize: number,
-): [number, number, number, Orientation] | null {
-  if (!Array.isArray(value) || (value.length !== 3 && value.length !== 4)) return null
-  const [id, a, b, o] = value as unknown[]
-  if (!isIndex(id) || id >= dictSize) return null
-  if (!isIndex(a) || !isIndex(b)) return null
-  // A code this version does not know is a document from the future in
-  // miniature, and gets the same treatment: refused, not guessed at.
-  if (o !== undefined && (!isIndex(o) || ORIENTATION_CODES[o] === undefined)) return null
-  return [id, a, b, o === undefined ? 'flat' : ORIENTATION_CODES[o as number]!]
-}
 
 export function decodeDocument(text: string): DecodeResult {
   let raw: unknown
