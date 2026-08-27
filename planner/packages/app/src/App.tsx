@@ -13,9 +13,11 @@ import { Toasts } from './ui/Toasts'
 import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
 import { OrientationToggle } from './ui/OrientationToggle'
+import { PaintSelection } from './ui/PaintSelection'
 import { SaveAssembly } from './ui/SaveAssembly'
 import { UndoRedo } from './ui/UndoRedo'
 import { WallActions } from './ui/WallActions'
+import { WallColors } from './ui/WallColors'
 import { WallSizeControls } from './ui/WallSizeControls'
 
 export function App() {
@@ -48,6 +50,7 @@ export function App() {
         <SaveAssembly />
         <UndoRedo />
         <PasteButton />
+        <WallColors />
         <WallActions />
         <span className="hint">
           {dragging ? (
@@ -62,6 +65,7 @@ export function App() {
               ) : null}{' '}
               · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
               <OrientationToggle />
+              <PaintSelection />
               <CopyCut />
             </>
           ) : selectedIds.length > 1 ? (
@@ -69,6 +73,7 @@ export function App() {
               <strong>{selectedIds.length} selected</strong> · <kbd>←→↑↓</kbd> move together ·{' '}
               <kbd>Del</kbd> remove
               <OrientationToggle />
+              <PaintSelection />
               <CopyCut />
             </>
           ) : (

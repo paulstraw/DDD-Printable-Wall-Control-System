@@ -1244,3 +1244,115 @@ canvas {
 .toast-close:hover {
   color: var(--ink);
 }
+
+/* ---------------------------------------------------------------------------
+ * Choosing colors
+ *
+ * One picker serves the header popover and the hint row, so the layout has to
+ * survive both: a column of three in a panel, and a single row inline beside
+ * the flat/shelf toggle.
+ * ------------------------------------------------------------------------- */
+
+.color-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.color-swatches {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+/*
+ * The swatch is the color, so the color is inline and everything here is the
+ * frame around it. The border is translucent black rather than `--line`: a
+ * fixed grey frame disappears against a grey swatch, and this darkens
+ * whatever it sits on.
+ */
+.swatch {
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/*
+ * Current reads as a ring, not a fill — a swatch cannot say "pressed" by
+ * changing color when the color is the whole point. `outline` rather than a
+ * border so the swatch does not resize, and offset so the ring is clearly
+ * around it rather than part of it.
+ */
+.swatch[data-pressed] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The browser's own picker, sized to sit in the row as one more swatch. */
+.color-custom {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.color-custom input[type='color'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+/* Chrome and Safari draw their own inset frame; this removes it. */
+.color-custom input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-custom input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-reset {
+  font-size: 0.72rem;
+  padding: 0.12rem 0.4rem;
+}
+
+/* The wall's three rows, in the header popover. */
+.wall-colors {
+  min-width: 17rem;
+}
+
+.wall-colors-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
+.wall-colors-label {
+  width: 5rem;
+  flex: none;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/*
+ * The selection's picker, in the hint row. Matches the spacing the
+ * orientation toggle and copy/cut already use so the row reads as one line
+ * rather than three controls that arrived separately.
+ */
+.paint-selection {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
+  vertical-align: middle;
+}

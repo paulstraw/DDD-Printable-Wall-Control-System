@@ -33,7 +33,7 @@ export function Scene({ board }: { board: Board }) {
     <>
       {/*
         The viewport's own background, not the app's. The chrome around the
-        canvas keeps its own colours — this is a scene, not a theme.
+        canvas keeps its own colors — this is a scene, not a theme.
       */}
       <color attach="background" args={[background]} />
       <hemisphereLight intensity={0.55} groundColor="#8b8f96" />

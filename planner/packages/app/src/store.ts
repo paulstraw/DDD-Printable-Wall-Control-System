@@ -113,7 +113,7 @@ export interface Placement {
    * legitimately black here and red there, and only the person building the
    * wall knows which. Being on the placement is also what buys undo — history
    * watches `placements` change, so painting a selection lands on the stack
-   * with no code written for it. A colour kept in a side map keyed by
+   * with no code written for it. A color kept in a side map keyed by
    * placement id would be silently skipped by ⌘Z, and nothing would say so.
    *
    * Absent is the common case and does not mean grey. It means *whatever the

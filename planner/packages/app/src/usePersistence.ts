@@ -32,7 +32,7 @@ export function usePersistence(): void {
   const heightIn = useStore((s) => s.heightIn)
   // Watched for the same reason the wall size is: it is in the document, so a
   // change to it is a change worth writing. Leaving it out would mean a new
-  // panel colour survived only until the next reload — or worse, survived by
+  // panel color survived only until the next reload — or worse, survived by
   // accident whenever a part happened to move afterwards.
   const colors = useStore((s) => s.colors)
 
