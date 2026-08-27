@@ -122,6 +122,25 @@ body,
   cursor: pointer;
 }
 
+/*
+ * Names that only a screen reader reads. Two boxes carry one: the assembly
+ * name, which had no label at all and leaned on its placeholder, and the
+ * catalog search, which had an `aria-label`. Both now have a real `<label>`
+ * the field wires to the control itself. Absolutely positioned so it takes
+ * no space and contributes nothing to the flex gap around it.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .save-assembly {
   display: flex;
   align-items: center;
@@ -229,6 +248,15 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+}
+
+/*
+ * The search box is a field now, and a field lays its parts out in a row.
+ * This one has exactly one visible part and wants the full width of the
+ * panel, so it goes back to being a block.
+ */
+.catalog-search {
+  display: block;
 }
 
 .catalog-head input[type='search'] {

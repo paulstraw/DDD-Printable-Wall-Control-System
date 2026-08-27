@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAX_ASSEMBLY_NAME } from '@ddd-planner/core'
+import { Button, Field, Input } from '../components'
 import { useStore } from '../store'
 
 /**
@@ -45,21 +46,27 @@ export function SaveAssembly() {
   }
 
   if (!naming) {
-    return (
-      <button className="ghost-button" onClick={() => setNaming(true)}>
-        Save {selectedCount} as assembly
-      </button>
-    )
+    return <Button onClick={() => setNaming(true)}>Save {selectedCount} as assembly</Button>
   }
 
   return (
-    <span className="save-assembly">
-      <input
+    <Field.Root className="save-assembly">
+      {/*
+        The label is hidden, not absent — there was none at all before. The
+        placeholder was standing in for one, and a placeholder leaves the
+        moment you start typing, taking the only description of the box with
+        it. Showing it would put the word "Name" in the header every time
+        someone saves an assembly, next to a box that only exists because they
+        pressed "Save 3 as assembly" a second ago. Hidden buys the accessible
+        name without spending the space.
+      */}
+      <Field.Label className="visually-hidden">Name this assembly</Field.Label>
+      <Input
         ref={input}
         value={name}
         maxLength={MAX_ASSEMBLY_NAME}
         placeholder="Name this assembly"
-        onChange={(e) => setName(e.target.value)}
+        onValueChange={setName}
         onKeyDown={(e) => {
           // Enter and Escape belong to the box while it is open; the global
           // handler already stands aside for inputs.
@@ -71,9 +78,9 @@ export function SaveAssembly() {
           e.stopPropagation()
         }}
       />
-      <button className="ghost-button" onClick={commit} disabled={name.trim().length === 0}>
+      <Button onClick={commit} disabled={name.trim().length === 0}>
         Save
-      </button>
-    </span>
+      </Button>
+    </Field.Root>
   )
 }

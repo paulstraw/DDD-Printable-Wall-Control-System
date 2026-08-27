@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { type RankContext, collectFacets, compatibilityScore, searchParts } from '@ddd-planner/core'
+import { Field, Input } from '../components'
 import { partById, useStore } from '../store'
 import { AssemblyPanel } from '../ui/AssemblyPanel'
 import { PARTS_BASE, useCatalog } from './useCatalog'
@@ -93,13 +94,17 @@ export function CatalogPanel() {
       <AssemblyPanel />
 
       <div className="catalog-head">
-        <input
-          type="search"
-          value={query}
-          placeholder="Search parts…"
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search parts"
-        />
+        {/*
+          Hidden label rather than the `aria-label` this carried before. Same
+          accessible name, but a real `<label>` the field wires up itself, so
+          it cannot drift from the control the way a hand-written attribute
+          can. Hidden because the placeholder says the same word and the panel
+          it heads is titled by being the catalog.
+        */}
+        <Field.Root className="catalog-search">
+          <Field.Label className="visually-hidden">Search parts</Field.Label>
+          <Input type="search" value={query} placeholder="Search parts…" onValueChange={setQuery} />
+        </Field.Root>
         <Chips
           label="Family"
           values={facets.families}
