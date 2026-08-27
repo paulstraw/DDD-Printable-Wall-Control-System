@@ -966,3 +966,284 @@ canvas {
   text-align: right;
   color: var(--ink);
 }
+
+/* ---------------------------------------------------------------------------
+ * The Base UI seam
+ *
+ * Styles for the wrapped controls in `src/components`. The ones that replace
+ * something the app already had are written to match it, so migrating a
+ * control changes its markup and not its appearance. The ones that are new —
+ * the popover and the toast stack — are new.
+ * ------------------------------------------------------------------------- */
+
+/*
+ * A toggle group inherits its size and border from whatever contains it; only
+ * the pressed look is shared, and it was written out twice before this.
+ */
+.toggle[data-pressed] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/*
+ * Matches `.wall-actions` and `.undo-redo`, which is what a toolbar replaces.
+ * The gain is behavioural — one tab stop per cluster, arrows to move within
+ * it — so nothing here should move.
+ */
+.toolbar,
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.toolbar-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.15rem;
+  background: var(--line);
+}
+
+/*
+ * The wall size. `.number-field-input` repeats `.wall-size input` rather than
+ * reusing it, because the input is no longer a direct child of `.wall-size` —
+ * Base UI puts a group between them.
+ */
+.number-field,
+.number-field-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.number-field-input {
+  width: 4rem;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  text-align: left;
+}
+
+.number-field-step {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.number-field-step:first-child {
+  border-radius: 5px 0 0 5px;
+  border-right-width: 0;
+}
+
+.number-field-step:last-child {
+  border-radius: 0 5px 5px 0;
+  border-left-width: 0;
+}
+
+.number-field-step:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+/*
+ * `.number-field-scrub` sits on the label, so the whole word "Width" is a
+ * horizontal drag that changes the number. `cursor: ew-resize` is the only
+ * thing that says so.
+ */
+.number-field-scrub {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.number-field-scrub-cursor {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.field-error {
+  font-size: 0.75rem;
+  color: #b3421d;
+}
+
+/*
+ * The popover. `z-index` puts it over the canvas, which makes its own stacking
+ * context; the popup is portalled to the body so it is not clipped by the
+ * header's `flex-wrap`.
+ */
+.popover-positioner {
+  z-index: 20;
+}
+
+.popover-popup {
+  padding: 0.7rem;
+  background: var(--bar);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(20, 25, 35, 0.14);
+  outline: none;
+}
+
+.popover-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.popover-description {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/*
+ * The toast stack, bottom right.
+ *
+ * Collapsed, the toasts sit on top of one another with a sliver of each one
+ * behind showing; hovering or focusing the viewport fans them out. That is
+ * Base UI's own arrangement and the reason to keep it is that three
+ * confirmations arriving together should not become a wall of cards over the
+ * corner of the model.
+ *
+ * `--toast-index` counts from the front, so the frontmost toast is 0.
+ */
+.toast-viewport {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+.toast {
+  --peek: 0.5rem;
+  --scale: calc(max(0, 1 - (var(--toast-index) * 0.06)));
+  --shrink: calc(1 - var(--scale));
+  --height: var(--toast-frontmost-height, var(--toast-height));
+
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 100%;
+  height: var(--height);
+  transform-origin: bottom center;
+  z-index: calc(100 - var(--toast-index));
+  background: var(--bar);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(20, 25, 35, 0.14);
+  user-select: none;
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - (var(--toast-index) * var(--peek)) -
+          (var(--shrink) * var(--height))
+      )
+    )
+    scale(var(--scale));
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s,
+    height 0.15s;
+}
+
+/*
+ * The gap between fanned-out toasts is a real hole in the hover target, so it
+ * gets filled by an invisible strip below each toast. Without it the stack
+ * collapses when the pointer crosses from one toast to the next.
+ */
+.toast::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--gap, 0.6rem) + 1px);
+}
+
+.toast[data-expanded] {
+  height: var(--toast-height);
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-offset-y) * -1 + (var(--toast-index) * var(--gap, 0.6rem) * -1) +
+          var(--toast-swipe-movement-y)
+      )
+    );
+}
+
+.toast[data-starting-style],
+.toast[data-ending-style] {
+  opacity: 0;
+  transform: translateY(150%);
+}
+
+.toast[data-limited] {
+  opacity: 0;
+}
+
+.toast-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  overflow: hidden;
+  transition: opacity 0.25s;
+}
+
+/* Hidden while stacked, faded back in when the stack fans out. */
+.toast-content[data-behind] {
+  opacity: 0;
+}
+
+.toast-content[data-expanded] {
+  opacity: 1;
+}
+
+.toast-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.toast-description {
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  flex: none;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.1rem 0.25rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  color: var(--ink);
+}
