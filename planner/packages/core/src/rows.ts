@@ -31,47 +31,86 @@ export function isIndex(value: unknown): value is number {
 export const ORIENTATION_CODES: Record<number, Orientation> = { 0: 'flat', 1: 'shelf' }
 export const CODE_FOR: Record<Orientation, number> = { flat: 0, shelf: 1 }
 
-/** The compact form of a placement, with orientation appended only when set. */
-export function writeRow(index: number, a: number, b: number, orientation: Orientation): number[] {
-  // Omitting the common case is what keeps a share link the length it was:
-  // a wall with no shelves encodes to exactly the bytes it did before.
-  return orientation === 'flat' ? [index, a, b] : [index, a, b, CODE_FOR[orientation]]
+/**
+ * The compact form of a placement: `[index, a, b]`, with orientation appended
+ * only when it is not flat, and a colour after that only when the part has
+ * been painted.
+ *
+ * `colour` is an index into the document's colour dictionary, not a hex
+ * string — the same trick the part ids use, and for the same reason. A wall
+ * painted in three colours pays for those three strings once instead of once
+ * per part.
+ *
+ * Absent means unpainted, which is not the same as painted the default
+ * colour: an unpainted part follows the wall's default and repaints when the
+ * default changes, and that is the whole of the colour model in one sentence.
+ */
+export function writeRow(
+  index: number,
+  a: number,
+  b: number,
+  orientation: Orientation,
+  colour: number | null = null,
+): number[] {
+  // Omitting the common case is what keeps a share link the length it was: a
+  // wall with no shelves and no paint encodes to exactly the bytes it did
+  // before colours existed, which is the point of doing it this way round.
+  if (colour === null) {
+    return orientation === 'flat' ? [index, a, b] : [index, a, b, CODE_FOR[orientation]]
+  }
+  // A colour has to sit in the fifth slot, so the fourth cannot be skipped
+  // even when it is flat. Position is the only thing telling these apart.
+  return [index, a, b, CODE_FOR[orientation], colour]
 }
 
 export function readTriple(
   value: unknown,
   dictSize: number,
-): [number, number, number, Orientation] | null {
-  if (!Array.isArray(value) || (value.length !== 3 && value.length !== 4)) return null
-  const [id, a, b, o] = value as unknown[]
+  colourCount: number,
+): [number, number, number, Orientation, number | null] | null {
+  const lengths = [3, 4, 5]
+  if (!Array.isArray(value) || !lengths.includes(value.length)) return null
+  const [id, a, b, o, c] = value as unknown[]
   if (!isIndex(id) || id >= dictSize) return null
   if (!isIndex(a) || !isIndex(b)) return null
   // A code this version does not know is a document from the future in
   // miniature, and gets the same treatment: refused, not guessed at.
   if (o !== undefined && (!isIndex(o) || ORIENTATION_CODES[o] === undefined)) return null
-  return [id, a, b, o === undefined ? 'flat' : ORIENTATION_CODES[o as number]!]
+  // A colour index pointing past the end of the dictionary is the same kind of
+  // damage as an unknown orientation, and earns the same answer. Guessing
+  // would mean painting a part a colour nobody chose.
+  if (c !== undefined && (!isIndex(c) || c >= colourCount)) return null
+  return [
+    id,
+    a,
+    b,
+    o === undefined ? 'flat' : ORIENTATION_CODES[o as number]!,
+    c === undefined ? null : (c as number),
+  ]
 }
 
 /**
- * Intern part ids into a dictionary that rows index into.
+ * Intern repeated strings into a dictionary that rows index into.
  *
- * Ids dominate the size of anything holding many placements — a forty-character
- * slug repeated fifty times — so both the document and the clipboard pay for
- * each one once.
+ * Written for part ids, which dominate the size of anything holding many
+ * placements — a forty-character slug repeated fifty times — so both the
+ * document and the clipboard pay for each one once. Colours want exactly the
+ * same treatment for exactly the same reason, so they use exactly the same
+ * thing; nothing here was ever specific to ids beyond the parameter name.
  */
 export function makeDictionary(): {
   readonly ids: string[]
-  intern: (partId: string) => number
+  intern: (value: string) => number
 } {
   const index = new Map<string, number>()
   const ids: string[] = []
   return {
     ids,
-    intern(partId: string): number {
-      const seen = index.get(partId)
+    intern(value: string): number {
+      const seen = index.get(value)
       if (seen !== undefined) return seen
-      index.set(partId, ids.length)
-      ids.push(partId)
+      index.set(value, ids.length)
+      ids.push(value)
       return ids.length - 1
     },
   }

@@ -115,7 +115,9 @@ export function decodeClipping(text: string): Clipping | null {
 
   const parts: AssemblyPart[] = []
   for (const row of rows) {
-    const triple = readTriple(row, ids.length)
+    // As in the document: no colour dictionary here yet, so no row may name a
+    // colour.
+    const triple = readTriple(row, ids.length, 0)
     // One bad row condemns the whole clipping. Half a paste is worse than
     // none: the user cannot see what is missing, only that what landed is
     // wrong.

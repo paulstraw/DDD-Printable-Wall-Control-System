@@ -129,7 +129,9 @@ export function decodeDocument(text: string): DecodeResult {
 
   const placements: PlacedRef[] = []
   for (const entry of placementsRaw) {
-    const triple = readTriple(entry, ids.length)
+    // No colour dictionary in this format yet, so a row claiming a colour is
+    // pointing at nothing and is refused along with the rest of the damage.
+    const triple = readTriple(entry, ids.length, 0)
     // One bad row means the file is not what it claims. Silently dropping it
     // would hand back a wall missing parts with no hint why.
     if (!triple) return { ok: false, error: 'That wall has a damaged placement.' }
@@ -155,7 +157,7 @@ export function decodeDocument(text: string): DecodeResult {
     }
     const parts: AssemblyPart[] = []
     for (const part of partsRaw) {
-      const triple = readTriple(part, ids.length)
+      const triple = readTriple(part, ids.length, 0)
       if (!triple) return { ok: false, error: `Assembly “${name}” has a damaged part.` }
       parts.push({
         partId: ids[triple[0]]!,
