@@ -60,3 +60,24 @@ export function isDefaultColors(colors: WallColors): boolean {
     colors.parts === DEFAULT_COLORS.parts
   )
 }
+
+/**
+ * What a part is actually painted, once inheritance has been applied.
+ *
+ * The whole of the rule, in one place on purpose. The scene calls it to decide
+ * what to draw and the BOM calls it to decide what to bill, and those two must
+ * never disagree about what an unpainted part is — a wall that renders black
+ * and prints a list saying grey is worse than either answer alone.
+ *
+ * It is one line, and that is not an argument against having it. The value is
+ * that there is exactly one line: `?? fallback` written twice is two places
+ * for someone to later add a special case to, and only one of them would get
+ * it.
+ *
+ * `fallback` is the wall's default part color, not a hard-coded grey —
+ * changing that default is precisely what is meant to repaint everything that
+ * never asked for anything else.
+ */
+export function resolveColor(part: { readonly color?: string }, fallback: string): string {
+  return part.color ?? fallback
+}
