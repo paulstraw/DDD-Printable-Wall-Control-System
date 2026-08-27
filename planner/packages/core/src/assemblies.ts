@@ -79,11 +79,15 @@ export function relativeParts(placements: readonly PlacedRef[]): AssemblyPart[] 
     minRow = Math.min(minRow, p.row)
   }
 
+  // Colors ride along. Rebasing is a change of coordinates and nothing else,
+  // so it has no business deciding what a part is painted; the two callers
+  // want different answers and each says so for itself.
   return placements.map((p) => ({
     partId: p.partId,
     dCol: p.col - minCol,
     dRow: p.row - minRow,
     orientation: p.orientation,
+    ...(p.color === undefined ? {} : { color: p.color }),
   }))
 }
 
@@ -140,13 +144,32 @@ export function uniqueAssemblyName(existing: readonly string[], desired: string)
   }
 }
 
-/** Build an assembly from the placements a user had selected. */
+/**
+ * Build an assembly from the placements a user had selected.
+ *
+ * **Colors are dropped here**, and this is the one place they are. An assembly
+ * is a template — "my drill station" is a shape worth keeping, and dropping it
+ * onto a wall six months from now should give it that wall's colors rather
+ * than dragging last spring's red along behind it.
+ *
+ * The clipboard, which shares every other part of this machinery, does the
+ * opposite and keeps them: a paste is a *duplicate* of a bay, and a duplicate
+ * that came back grey would be a bug. The two differ in intent, not in
+ * encoding, which is why the stripping happens here at save time rather than
+ * in the codec both of them write through.
+ *
+ * The same asymmetry the README already draws between paste and import.
+ */
 export function createAssembly(
   id: string,
   name: string,
   placements: readonly PlacedRef[],
 ): Assembly {
-  return { id, name, parts: relativeParts(placements) }
+  return {
+    id,
+    name,
+    parts: relativeParts(placements).map(({ color: _dropped, ...part }) => part),
+  }
 }
 
 /**
@@ -163,5 +186,6 @@ export function absoluteParts(
     col: anchor.col + p.dCol,
     row: anchor.row + p.dRow,
     orientation: p.orientation,
+    ...(p.color === undefined ? {} : { color: p.color }),
   }))
 }

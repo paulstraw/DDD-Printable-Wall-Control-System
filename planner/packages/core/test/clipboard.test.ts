@@ -136,3 +136,58 @@ describe('decodeClipping refuses', () => {
     refused(JSON.stringify({ v: 1, w: [32, 32], d: ['spacer'], p: [[0, 4, 2]], a: [] }))
   })
 })
+
+describe('colors on the clipboard', () => {
+  const painted: PlacedRef[] = [
+    { partId: 'flat-left', col: 6, row: 4, orientation: 'flat', color: '#ff0000' },
+    { partId: 'blank-3', col: 7, row: 4, orientation: 'shelf', color: '#ff0000' },
+    { partId: 'flat-right', col: 10, row: 4, orientation: 'flat' },
+  ]
+
+  it('survives a copy and a paste, because a paste is a duplicate', () => {
+    const back = decodeClipping(encodeClipping(painted))
+    expect(back?.parts).toEqual([
+      { partId: 'flat-left', dCol: 0, dRow: 0, orientation: 'flat', color: '#ff0000' },
+      { partId: 'blank-3', dCol: 1, dRow: 0, orientation: 'shelf', color: '#ff0000' },
+      { partId: 'flat-right', dCol: 4, dRow: 0, orientation: 'flat' },
+    ])
+  })
+
+  it('leaves an unpainted part with no color key', () => {
+    const back = decodeClipping(encodeClipping(painted))
+    expect('color' in back!.parts[2]!).toBe(false)
+  })
+
+  it('interns each color once', () => {
+    expect(encodeClipping(painted).split('#ff0000').length - 1).toBe(1)
+  })
+
+  it('says nothing about colors when nothing was painted', () => {
+    const plain: PlacedRef[] = [{ partId: 'a', col: 1, row: 1, orientation: 'flat' }]
+    // A clipping of an unpainted bay is byte-for-byte what it always was.
+    expect(encodeClipping(plain)).not.toContain('"c"')
+  })
+
+  it('refuses a clipping naming a color it did not bring', () => {
+    const doc = JSON.stringify({
+      v: CLIPBOARD_VERSION,
+      k: CLIPBOARD_KIND,
+      o: [0, 0],
+      d: ['a'],
+      p: [[0, 0, 0, 0, 0]],
+    })
+    expect(decodeClipping(doc)).toBeNull()
+  })
+
+  it('refuses a clipping whose color list is not colors', () => {
+    const doc = JSON.stringify({
+      v: CLIPBOARD_VERSION,
+      k: CLIPBOARD_KIND,
+      o: [0, 0],
+      d: ['a'],
+      p: [[0, 0, 0]],
+      c: ['rebeccapurple'],
+    })
+    expect(decodeClipping(doc)).toBeNull()
+  })
+})

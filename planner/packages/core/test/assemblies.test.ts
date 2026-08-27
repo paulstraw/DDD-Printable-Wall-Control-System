@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_ASSEMBLY_NAME,
+  type PlacedRef,
   absoluteParts,
   assemblyExtent,
   assemblyPartCounts,
@@ -182,5 +183,38 @@ describe('createAssembly and absoluteParts', () => {
     const empty = createAssembly('a2', 'Nothing', [])
     expect(empty.parts).toEqual([])
     expect(absoluteParts(empty, { col: 3, row: 3 })).toEqual([])
+  })
+})
+
+describe('colors and the two things a group of parts can be', () => {
+  const painted: PlacedRef[] = [
+    { partId: 'flat-left', col: 6, row: 4, orientation: 'flat', color: '#ff0000' },
+    { partId: 'blank-3', col: 7, row: 4, orientation: 'shelf', color: '#0000ff' },
+  ]
+
+  it('drops colors when the group is saved as an assembly', () => {
+    // An assembly is a template. Dropping "my drill station" onto a wall six
+    // months from now should give it that wall's colors, not last spring's.
+    const assembly = createAssembly('a1', 'Drill station', painted)
+    expect(assembly.parts).toEqual([
+      { partId: 'flat-left', dCol: 0, dRow: 0, orientation: 'flat' },
+      { partId: 'blank-3', dCol: 1, dRow: 0, orientation: 'shelf' },
+    ])
+    for (const part of assembly.parts) expect('color' in part).toBe(false)
+  })
+
+  it('keeps colors through the rebasing itself', () => {
+    // `relativeParts` is a change of coordinates and nothing more. The
+    // stripping is a decision `createAssembly` makes, not one the maths makes,
+    // which is what lets the clipboard share this and keep its colors.
+    expect(relativeParts(painted).map((p) => p.color)).toEqual(['#ff0000', '#0000ff'])
+  })
+
+  it('carries a color back onto the wall when an assembly is placed', () => {
+    const assembly = { id: 'a1', name: 'Bay', parts: relativeParts(painted) }
+    expect(absoluteParts(assembly, { col: 10, row: 2 })).toEqual([
+      { partId: 'flat-left', col: 10, row: 2, orientation: 'flat', color: '#ff0000' },
+      { partId: 'blank-3', col: 11, row: 2, orientation: 'shelf', color: '#0000ff' },
+    ])
   })
 })

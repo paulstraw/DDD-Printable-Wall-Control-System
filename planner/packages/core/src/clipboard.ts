@@ -25,6 +25,7 @@
  */
 
 import { type AssemblyPart, type PlacedRef, relativeParts } from './assemblies'
+import { isHexColor } from './colors'
 import { isIndex, makeDictionary, readTriple, writeRow } from './rows'
 
 export const CLIPBOARD_VERSION = 1
@@ -45,8 +46,13 @@ export interface ClipboardDocument {
   readonly o: readonly [number, number]
   /** Part id dictionary; rows index into it. */
   readonly d: readonly string[]
-  /** Parts as `[dictIndex, dCol, dRow, o?]`, relative to the origin. */
+  /** Parts as `[dictIndex, dCol, dRow, o?, c?]`, relative to the origin. */
   readonly p: readonly (readonly number[])[]
+  /**
+   * Color dictionary, absent when nothing copied was painted — so copying an
+   * unpainted bay puts exactly the text on the clipboard that it always did.
+   */
+  readonly c?: readonly string[]
 }
 
 /** Parts, and where they were cut from. */
@@ -58,6 +64,10 @@ export interface Clipping {
 
 export function encodeClipping(placements: readonly PlacedRef[]): string {
   const { ids, intern } = makeDictionary()
+  // A paste is a duplicate of a bay, so colors come with it. This is the half
+  // of the asymmetry that keeps them; `createAssembly` is the half that does
+  // not.
+  const { ids: colors, intern: internColor } = makeDictionary()
   const parts = relativeParts(placements)
 
   let col = 0
@@ -67,12 +77,23 @@ export function encodeClipping(placements: readonly PlacedRef[]): string {
     row = Math.min(...placements.map((p) => p.row))
   }
 
+  const p = parts.map((part) =>
+    writeRow(
+      intern(part.partId),
+      part.dCol,
+      part.dRow,
+      part.orientation,
+      part.color === undefined ? null : internColor(part.color),
+    ),
+  )
+
   const doc: ClipboardDocument = {
     v: CLIPBOARD_VERSION,
     k: CLIPBOARD_KIND,
     o: [col, row],
     d: ids,
-    p: parts.map((part) => writeRow(intern(part.partId), part.dCol, part.dRow, part.orientation)),
+    p,
+    ...(colors.length > 0 ? { c: colors } : {}),
   }
   return JSON.stringify(doc)
 }
@@ -110,14 +131,16 @@ export function decodeClipping(text: string): Clipping | null {
   if (!Array.isArray(dictionary) || dictionary.some((id) => typeof id !== 'string')) return null
   const ids = dictionary as string[]
 
+  const colorsRaw = doc.c ?? []
+  if (!Array.isArray(colorsRaw) || !colorsRaw.every(isHexColor)) return null
+  const colors = colorsRaw as string[]
+
   const rows = doc.p
   if (!Array.isArray(rows)) return null
 
   const parts: AssemblyPart[] = []
   for (const row of rows) {
-    // As in the document: no color dictionary here yet, so no row may name a
-    // color.
-    const triple = readTriple(row, ids.length, 0)
+    const triple = readTriple(row, ids.length, colors.length)
     // One bad row condemns the whole clipping. Half a paste is worse than
     // none: the user cannot see what is missing, only that what landed is
     // wrong.
@@ -127,6 +150,7 @@ export function decodeClipping(text: string): Clipping | null {
       dCol: triple[1],
       dRow: triple[2],
       orientation: triple[3],
+      ...(triple[4] === null ? {} : { color: colors[triple[4]]! }),
     })
   }
 
