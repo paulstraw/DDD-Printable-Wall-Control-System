@@ -9,6 +9,7 @@ import {
   type SelectMode,
   type AssemblyPart,
   type PlacedRef,
+  type WallColors,
   applySelection,
   clampGroupDelta,
   createAssembly,
@@ -145,6 +146,21 @@ interface State {
   heightIn: number
   setWallSize: (size: { widthIn: number; heightIn: number }) => void
 
+  /**
+   * The three colors that belong to the wall rather than to any part: what
+   * is behind it, what the panel is finished in, and what a part is printed
+   * in unless it says otherwise.
+   *
+   * Changing one makes **no history entry**, which is the treatment typing a
+   * new wall size already gets and for the same reason — you do not undo your
+   * way out of choosing a panel finish. The subscription that writes history
+   * watches `placements`, so this needs no code to arrange; it needs only not
+   * to touch `placements`. A `Moment` still *carries* these, so undoing an
+   * import cannot strand you on the imported wall's scheme.
+   */
+  colors: WallColors
+  setWallColor: (which: keyof WallColors, color: string) => void
+
   catalog: CatalogFile | null
   catalogError: string | null
   setCatalog: (catalog: CatalogFile) => void
@@ -201,6 +217,19 @@ interface State {
    * pressing R turns the spacer and leaves the brackets where they are.
    */
   setOrientation: (orientation: Orientation) => void
+
+  /**
+   * Paint every part in the selection, or strip the paint off them.
+   *
+   * `null` means "back to the wall default" and removes the override
+   * entirely, rather than writing today's default onto each part — which
+   * would look identical and then quietly stop following the wall.
+   *
+   * Unlike `setOrientation` this asks nothing of the catalog: every part can
+   * be printed in every color, so there is no such thing as a part the
+   * gesture has to skip.
+   */
+  paintSelection: (color: string | null) => void
 
   beginPartDrag: (partId: string) => void
   beginAssemblyDrag: (assemblyId: string) => void
@@ -468,6 +497,9 @@ export const useStore = create<State>((set, get) => ({
   setWallSize: ({ widthIn, heightIn }) =>
     set({ widthIn, heightIn, board: createBoard(widthIn, heightIn) }),
 
+  colors: DEFAULT_COLORS,
+  setWallColor: (which, color) => set((s) => ({ colors: { ...s.colors, [which]: color } })),
+
   catalog: null,
   catalogError: null,
   setCatalog: (catalog) => set({ catalog, catalogError: null }),
@@ -585,6 +617,31 @@ export const useStore = create<State>((set, get) => ({
       changed = true
       return { ...placement, orientation }
     })
+    if (changed) set({ placements: next })
+  },
+
+  paintSelection: (color) => {
+    const { placements, selectedIds } = get()
+    if (selectedIds.length === 0) return
+
+    const chosen = new Set(selectedIds)
+    let changed = false
+    const next = placements.map((placement) => {
+      if (!chosen.has(placement.id)) return placement
+      if (placement.color === (color ?? undefined)) return placement
+      changed = true
+      if (color === null) {
+        // Delete the key rather than set it to undefined. An unpainted part
+        // is one with no color at all, all the way out to the document.
+        const { color: _cleared, ...rest } = placement
+        return rest
+      }
+      return { ...placement, color }
+    })
+
+    // Same guard `setOrientation` uses, and it is load-bearing rather than an
+    // optimisation: leaving `placements` identical is what keeps a paint that
+    // changed nothing off the undo stack.
     if (changed) set({ placements: next })
   },
 
@@ -787,9 +844,7 @@ export const useStore = create<State>((set, get) => ({
         ...(p.color === undefined ? {} : { color: p.color }),
       })),
       assemblies,
-      // The store does not own colors yet, so every wall it snapshots is at
-      // the defaults — which is exactly what the planner draws today.
-      colors: DEFAULT_COLORS,
+      colors: get().colors,
     }
   },
 

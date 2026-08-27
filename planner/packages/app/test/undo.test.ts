@@ -266,3 +266,69 @@ describe('painting a part', () => {
     expect(state().placements[0]?.color).toBeUndefined()
   })
 })
+
+describe('paintSelection', () => {
+  it('paints only what is selected', () => {
+    place(1)
+    place(3)
+    const [first] = state().placements
+    useStore.setState({ selectedIds: [first!.id] })
+    state().paintSelection('#ff0000')
+
+    expect(state().placements.map((p) => p.color)).toEqual(['#ff0000', undefined])
+  })
+
+  it('strips the override rather than stamping the default', () => {
+    // Writing today's default onto each part would look identical and then
+    // quietly stop following the wall, which is the bug this avoids.
+    place(1)
+    state().selectAll()
+    state().paintSelection('#ff0000')
+    state().paintSelection(null)
+
+    expect('color' in state().placements[0]!).toBe(false)
+  })
+
+  it('does nothing at all when nothing is selected', () => {
+    place(1)
+    // Anything placed arrives selected, so this has to be said out loud.
+    useStore.setState({ selectedIds: [] })
+    const before = state().placements
+    state().paintSelection('#ff0000')
+    expect(state().placements).toBe(before)
+  })
+
+  it('makes no history entry when the color is already what was asked for', () => {
+    place(1)
+    state().selectAll()
+    state().paintSelection('#ff0000')
+    const steps = state().history.past.length
+    state().paintSelection('#ff0000')
+    expect(state().history.past.length).toBe(steps)
+  })
+})
+
+describe('the wall’s own colors', () => {
+  it('are not something you undo your way out of', () => {
+    // The same treatment typing a new wall size gets, and for the same
+    // reason. History watches `placements`; this deliberately does not touch
+    // them.
+    place(1)
+    const steps = state().history.past.length
+    state().setWallColor('panel', '#000000')
+    state().setWallColor('background', '#101014')
+    expect(state().history.past.length).toBe(steps)
+    expect(state().colors.panel).toBe('#000000')
+  })
+
+  it('leave the other two alone', () => {
+    state().setWallColor('panel', '#000000')
+    expect(state().colors.background).toBe(DEFAULT_COLORS.background)
+    expect(state().colors.parts).toBe(DEFAULT_COLORS.parts)
+  })
+
+  it('travel into the document a snapshot builds', () => {
+    state().setWallColor('parts', '#123456')
+    expect(state().snapshot().colors.parts).toBe('#123456')
+  })
+})
