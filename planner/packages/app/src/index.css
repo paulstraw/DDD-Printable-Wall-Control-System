@@ -114,22 +114,6 @@ body,
   gap: 0.35rem;
 }
 
-.wall-status {
-  font-size: 0.75rem;
-  color: var(--muted);
-  max-width: 22rem;
-  overflow-wrap: anywhere;
-}
-
-.as-text {
-  font: inherit;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
 /*
  * Names that only a screen reader reads. Two boxes carry one: the assembly
  * name, which had no label at all and leaned on its placeholder, and the
@@ -567,13 +551,6 @@ canvas {
 
 .bom-foot .bom-note {
   padding: 0.5rem 0 0;
-}
-
-.bom-error {
-  margin: 0.4rem 0 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: #8a4b2a;
 }
 
 /* A part the planner cannot position: listed, findable, downloadable, but
@@ -1232,9 +1209,15 @@ canvas {
   opacity: 1;
 }
 
-.toast-title {
+.toast-text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.toast-title {
   font-size: 0.78rem;
   color: var(--ink);
   overflow-wrap: anywhere;

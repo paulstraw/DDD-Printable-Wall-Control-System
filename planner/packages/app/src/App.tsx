@@ -9,6 +9,7 @@ import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
 import { CopyCut, PasteButton } from './ui/Clipboard'
 import { EmptyState } from './ui/EmptyState'
+import { Toasts } from './ui/Toasts'
 import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
 import { OrientationToggle } from './ui/OrientationToggle'
@@ -20,7 +21,7 @@ import { WallSizeControls } from './ui/WallSizeControls'
 export function App() {
   useKeyboard()
   useClipboard()
-  const [restoreNote, dismissRestoreNote] = usePersistence()
+  usePersistence()
 
   const board = useStore((s) => s.board)
   const widthIn = useStore((s) => s.widthIn)
@@ -48,15 +49,6 @@ export function App() {
         <UndoRedo />
         <PasteButton />
         <WallActions />
-        {restoreNote ? (
-          <button
-            className="wall-status warn-note as-text"
-            onClick={dismissRestoreNote}
-            title="Dismiss"
-          >
-            {restoreNote}
-          </button>
-        ) : null}
         <span className="hint">
           {dragging ? (
             <>
@@ -113,6 +105,8 @@ export function App() {
           <BomPanel />
         </div>
       </div>
+
+      <Toasts />
     </div>
   )
 }

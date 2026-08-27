@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { decodeDocument, encodeDocument, unknownPartIds } from '@ddd-planner/core'
+import { useToastManager } from './components'
 import { loadLocal, readShareFragment, saveLocal } from './persistence'
 import { useStore } from './store'
 
@@ -19,7 +20,8 @@ import { useStore } from './store'
  * Restoring waits for the catalog so that parts a link names but this
  * library does not have can be reported rather than vanishing.
  */
-export function usePersistence(): [note: string | null, dismiss: () => void] {
+export function usePersistence(): void {
+  const toast = useToastManager()
   const catalog = useStore((s) => s.catalog)
   const hydrate = useStore((s) => s.hydrate)
   const snapshot = useStore((s) => s.snapshot)
@@ -29,7 +31,6 @@ export function usePersistence(): [note: string | null, dismiss: () => void] {
   const widthIn = useStore((s) => s.widthIn)
   const heightIn = useStore((s) => s.heightIn)
 
-  const [note, setNote] = useState<string | null>(null)
   const restored = useRef(false)
 
   useEffect(() => {
@@ -42,7 +43,17 @@ export function usePersistence(): [note: string | null, dismiss: () => void] {
 
     const result = decodeDocument(text)
     if (!result.ok) {
-      setNote(fromLink ? `That share link could not be read. ${result.error}` : null)
+      // A local autosave that will not decode is not worth mentioning — there
+      // is nothing the reader did to cause it and nothing they can do about
+      // it. A share link someone sent them is different: they are entitled to
+      // know why it came up empty.
+      if (fromLink) {
+        toast.add({
+          title: `That share link could not be read. ${result.error}`,
+          timeout: 0,
+          priority: 'high',
+        })
+      }
       return
     }
 
@@ -57,13 +68,15 @@ export function usePersistence(): [note: string | null, dismiss: () => void] {
 
     const missing = unknownPartIds(result.state, new Set(catalog.parts.map((p) => p.id)))
     if (missing.length > 0) {
-      setNote(
-        `${missing.length} part${missing.length === 1 ? '' : 's'} in that wall ${
+      toast.add({
+        title: `${missing.length} part${missing.length === 1 ? '' : 's'} in that wall ${
           missing.length === 1 ? 'is' : 'are'
         } not in this library and will not appear.`,
-      )
+        timeout: 0,
+        priority: 'high',
+      })
     }
-  }, [catalog, hydrate])
+  }, [catalog, hydrate, toast])
 
   useEffect(() => {
     if (!restored.current) return
@@ -73,9 +86,10 @@ export function usePersistence(): [note: string | null, dismiss: () => void] {
     saveLocal(encodeDocument(state))
   }, [placements, assemblies, widthIn, heightIn, snapshot])
 
-  // The note describes what happened at load. It stays until waved away
-  // rather than guessing when it has stopped being interesting.
-  return [note, () => setNote(null)]
+  // The load notes describe what happened before the reader arrived, so they
+  // are added with no timeout and stay until waved away — the same treatment
+  // the dismissable note in the header used to get, rather than guessing when
+  // they have stopped being interesting.
 }
 
 /** Whether there is anything worth putting in a link or a file. */

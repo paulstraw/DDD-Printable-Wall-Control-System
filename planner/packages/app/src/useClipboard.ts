@@ -1,6 +1,29 @@
 import { useEffect } from 'react'
+import { useToastManager } from './components'
+import type { PasteResult } from './store'
 import { useStore } from './store'
 import { isTyping } from './useKeyboard'
+
+/**
+ * What to say about a paste, or `null` when it went perfectly and needs no
+ * comment.
+ *
+ * Shared by the two ways in — the paste gesture here, and the Paste button in
+ * `ui/Clipboard.tsx` — because the same outcome should not be described two
+ * different ways depending on which one the user reached for.
+ *
+ * A paste of text that was never a clipping says nothing *here*: the gesture
+ * belonged to someone else and there is nothing to report. The button has to
+ * answer for itself, and does so on its own.
+ */
+export function pasteNotice(result: PasteResult): string | null {
+  if (!result.ok) return null
+  if (result.count === 0) return 'Nothing in that copy is in this library.'
+  if (result.skipped === 0) return null
+  return `Pasted ${result.count} · ${result.skipped} part${
+    result.skipped === 1 ? '' : 's'
+  } not in this library`
+}
 
 /**
  * Copy, cut and paste, through the browser's own clipboard events.
@@ -29,6 +52,8 @@ function wallOwnsGesture(target: EventTarget | null): boolean {
 }
 
 export function useClipboard() {
+  const toast = useToastManager()
+
   useEffect(() => {
     function onCopy(event: ClipboardEvent) {
       if (!wallOwnsGesture(event.target)) return
@@ -55,7 +80,12 @@ export function useClipboard() {
       // deliberately *not* consulted here: falling back to it would mean
       // copying a URL somewhere else and pasting here drops six brackets you
       // copied twenty minutes ago onto the wall.
-      if (useStore.getState().pasteText(text)) event.preventDefault()
+      const result = useStore.getState().pasteText(text)
+      if (!result.ok) return
+      event.preventDefault()
+
+      const notice = pasteNotice(result)
+      if (notice !== null) toast.add({ title: notice })
     }
 
     window.addEventListener('copy', onCopy)
@@ -66,5 +96,5 @@ export function useClipboard() {
       window.removeEventListener('cut', onCut)
       window.removeEventListener('paste', onPaste)
     }
-  }, [])
+  }, [toast])
 }

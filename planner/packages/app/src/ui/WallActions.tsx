@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { decodeDocument, encodeDocument, unknownPartIds } from '@ddd-planner/core'
-import { Toolbar } from '../components'
+import { Toolbar, useToastManager } from '../components'
 import { downloadJson, shareFragmentFor } from '../persistence'
 import { useStore } from '../store'
 import { useHasContent } from '../usePersistence'
@@ -8,7 +8,9 @@ import { useHasContent } from '../usePersistence'
 /**
  * Share, export and import.
  *
- * All three move the same document; only the vehicle differs.
+ * All three move the same document; only the vehicle differs — and all three
+ * have something to say afterwards, which is why the header used to keep one
+ * message in the store and why it no longer has to.
  */
 export function WallActions() {
   const snapshot = useStore((s) => s.snapshot)
@@ -16,10 +18,7 @@ export function WallActions() {
   const catalog = useStore((s) => s.catalog)
   const hasContent = useHasContent()
 
-  // The header has one slot for a message and three components with
-  // something to put in it, so the message lives in the store.
-  const status = useStore((s) => s.status)
-  const setStatus = useStore((s) => s.setStatus)
+  const toast = useToastManager()
   const file = useRef<HTMLInputElement>(null)
 
   async function share() {
@@ -28,24 +27,26 @@ export function WallActions() {
     )
     try {
       await navigator.clipboard.writeText(url)
-      setStatus(`Link copied · ${(url.length / 1024).toFixed(1)} kB`)
+      toast.add({ title: `Link copied · ${(url.length / 1024).toFixed(1)} kB` })
     } catch {
       // Clipboard permission can be refused; putting the link in the address
       // bar still lets someone copy it by hand.
       window.location.hash = shareFragmentFor(encodeDocument(snapshot()))
-      setStatus('Link is in the address bar — copy it from there')
+      toast.add({ title: 'Link is in the address bar — copy it from there' })
     }
   }
 
   function exportFile() {
     downloadJson('wall-plan.json', encodeDocument(snapshot(), { pretty: true }))
-    setStatus('Exported wall-plan.json')
+    toast.add({ title: 'Exported wall-plan.json' })
   }
 
   async function importFile(chosen: File) {
     const result = decodeDocument(await chosen.text())
     if (!result.ok) {
-      setStatus(result.error)
+      // A file that would not load is the one message here worth more than
+      // five seconds, so it stays until it is waved away.
+      toast.add({ title: result.error, timeout: 0, priority: 'high' })
       return
     }
     hydrate(result.state)
@@ -53,11 +54,12 @@ export function WallActions() {
     const missing = catalog
       ? unknownPartIds(result.state, new Set(catalog.parts.map((p) => p.id)))
       : []
-    setStatus(
-      missing.length > 0
-        ? `Imported · ${missing.length} part${missing.length === 1 ? '' : 's'} not in this library`
-        : `Imported ${result.state.placements.length} parts`,
-    )
+    toast.add({
+      title:
+        missing.length > 0
+          ? `Imported · ${missing.length} part${missing.length === 1 ? '' : 's'} not in this library`
+          : `Imported ${result.state.placements.length} parts`,
+    })
   }
 
   return (
@@ -83,7 +85,6 @@ export function WallActions() {
           e.target.value = ''
         }}
       />
-      {status ? <span className="wall-status">{status}</span> : null}
     </Toolbar.Root>
   )
 }

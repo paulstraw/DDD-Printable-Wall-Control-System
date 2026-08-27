@@ -106,6 +106,22 @@ export interface Placement {
   readonly orientation: Orientation
 }
 
+/**
+ * What a paste did.
+ *
+ * `ok: false` means the text was not a clipping at all, and the paste is not
+ * this app's to consume. `ok: true` means it was, even when `count` is zero —
+ * a clipping naming only parts this library lacks is still ours, still eaten,
+ * and still worth saying something about.
+ *
+ * Counts rather than a sentence, because the store does not know where the
+ * sentence is going, and a store that carried the wording would be a store
+ * that had to be edited to change a comma.
+ */
+export type PasteResult =
+  | { readonly ok: false }
+  | { readonly ok: true; readonly count: number; readonly skipped: number }
+
 interface State {
   board: Board
   widthIn: number
@@ -195,11 +211,16 @@ interface State {
   /**
    * Put a clipping on the wall, beside where it was taken from.
    *
-   * Returns whether the text *was* a clipping — which is not the same as
+   * Reports whether the text *was* a clipping — which is not the same as
    * whether anything landed. A clipping naming only parts this library lacks
    * is still ours, still consumed, and still worth a word about.
+   *
+   * It reports the counts rather than the sentence, because the store does not
+   * know where the sentence is going. The two callers say it differently: the
+   * paste *event* has a wall under the pointer, the Paste *button* has a
+   * person who pressed it and is owed an answer either way.
    */
-  pasteText: (text: string) => boolean
+  pasteText: (text: string) => PasteResult
 
   /**
    * Where the last paste landed, so pressing paste again marches the copy
@@ -207,16 +228,6 @@ interface State {
    * so copying something new starts over.
    */
   pasteAnchor: { key: string; col: number; row: number } | null
-
-  /**
-   * What the header should be saying right now — an import result, a share
-   * link, a paste that skipped something.
-   *
-   * One field rather than a string of local `useState`s, because there is one
-   * slot in the header and three components with something to put in it.
-   */
-  status: string | null
-  setStatus: (message: string | null) => void
 
   /** Groups the user has saved, newest last. */
   assemblies: Assembly[]
@@ -453,7 +464,6 @@ export const useStore = create<State>((set, get) => ({
   history: EMPTY_HISTORY,
   clipping: null,
   pasteAnchor: null,
-  status: null,
 
   // Opens on Y at 0: the plane of the board's front face, where the wall
   // side and the room part company.
@@ -591,8 +601,6 @@ export const useStore = create<State>((set, get) => ({
     return unique
   },
 
-  setStatus: (status) => set({ status }),
-
   copySelection: () => {
     const { placements, selectedIds } = get()
     if (selectedIds.length === 0) return null
@@ -618,7 +626,7 @@ export const useStore = create<State>((set, get) => ({
 
   pasteText: (text) => {
     const clipping = decodeClipping(text)
-    if (clipping === null) return false
+    if (clipping === null) return { ok: false }
 
     const state = get()
     const { catalog } = state
@@ -631,10 +639,7 @@ export const useStore = create<State>((set, get) => ({
     const usable = known ? clipping.parts.filter((p) => known.has(p.partId)) : clipping.parts
     const skipped = clipping.parts.length - usable.length
 
-    if (usable.length === 0) {
-      set({ status: 'Nothing in that copy is in this library.' })
-      return true
-    }
+    if (usable.length === 0) return { ok: true, count: 0, skipped }
 
     // Beside itself, not on top of itself: a bay copied to be repeated along
     // the wall should land flush to the right of the one it came from.
@@ -658,12 +663,8 @@ export const useStore = create<State>((set, get) => ({
         col: Math.min(...landed.map((p) => p.col)),
         row: Math.min(...landed.map((p) => p.row)),
       },
-      status:
-        skipped > 0
-          ? `Pasted ${usable.length} · ${skipped} part${skipped === 1 ? '' : 's'} not in this library`
-          : null,
     })
-    return true
+    return { ok: true, count: landed.length, skipped }
   },
 
   dismissIssue: (id) =>

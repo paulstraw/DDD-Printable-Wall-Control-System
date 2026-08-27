@@ -1,5 +1,6 @@
-import { Button, Toolbar } from '../components'
+import { Button, Toolbar, useToastManager } from '../components'
 import { useStore } from '../store'
+import { pasteNotice } from '../useClipboard'
 
 /**
  * Copy, cut and paste as buttons, for the people who have no keys.
@@ -61,6 +62,8 @@ export function CopyCut() {
  * and on a phone this is the only way in.
  */
 export function PasteButton() {
+  const toast = useToastManager()
+
   async function paste() {
     const store = useStore.getState()
 
@@ -78,9 +81,22 @@ export function PasteButton() {
     // something that is not a wall, and the right answer to it is nothing.
     if (!readable) text = store.clipping
 
-    if (text === null || text === '' || !store.pasteText(text)) {
-      store.setStatus('Nothing on the clipboard to paste.')
+    // The button, unlike the gesture, has to answer for itself: someone
+    // pressed it on purpose and a button that silently does nothing is
+    // indistinguishable from a broken one.
+    if (text === null || text === '') {
+      toast.add({ title: 'Nothing on the clipboard to paste.' })
+      return
     }
+
+    const result = store.pasteText(text)
+    if (!result.ok) {
+      toast.add({ title: 'Nothing on the clipboard to paste.' })
+      return
+    }
+
+    const notice = pasteNotice(result)
+    if (notice !== null) toast.add({ title: notice })
   }
 
   // A plain button, not a toolbar item: it stands alone in the header, and a

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { Toast } from './components'
 import { useStore } from './store'
 import './index.css'
 
@@ -15,7 +16,12 @@ const container = document.getElementById('root')
 if (!container) throw new Error('#root missing from index.html')
 
 createRoot(container).render(
+  // The provider wraps `App` rather than sitting inside it, because `App`'s
+  // own hooks — the one that restores a wall on arrival, above all — queue
+  // toasts while they run, and a component cannot use a context it provides.
   <StrictMode>
-    <App />
+    <Toast.Provider>
+      <App />
+    </Toast.Provider>
   </StrictMode>,
 )

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { zip } from 'fflate'
 import { assetSources, uniqueEntryNames } from '@ddd-planner/core'
+import { useToastManager } from '../components'
 
 export interface DownloadFile {
   readonly path: string
@@ -52,6 +53,7 @@ function saveBlob(bytes: Uint8Array, filename: string) {
 }
 
 export function useDownload() {
+  const toast = useToastManager()
   const [status, setStatus] = useState<DownloadStatus>({ phase: 'idle' })
 
   const download = useCallback(async (files: readonly DownloadFile[], filename = 'wall-parts.zip') => {
@@ -80,9 +82,14 @@ export function useDownload() {
       setStatus({ phase: 'done' })
       setTimeout(() => setStatus({ phase: 'idle' }), 2500)
     } catch (e) {
-      setStatus({ phase: 'error', message: e instanceof Error ? e.message : String(e) })
+      const message = e instanceof Error ? e.message : String(e)
+      setStatus({ phase: 'error', message })
+      // A failed download is worth more than five seconds: it is usually a
+      // network that came and went, and the reader has to decide whether to
+      // try again.
+      toast.add({ title: `That download did not finish. ${message}`, timeout: 0, priority: 'high' })
     }
-  }, [])
+  }, [toast])
 
   return { status, download }
 }

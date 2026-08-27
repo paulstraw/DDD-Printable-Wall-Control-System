@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { encodeClipping } from '@ddd-planner/core'
 import { EMPTY_HISTORY } from '../src/history'
 import { type CatalogFile, useStore } from '../src/store'
+import { pasteNotice } from '../src/useClipboard'
 
 /**
  * The clipboard *format* is proved in `core/test/clipboard.test.ts`. What is
@@ -169,28 +170,32 @@ describe('a part this library does not have', () => {
   ])
 
   it('is skipped rather than placed where nobody can see or remove it', () => {
-    expect(state().pasteText(foreign)).toBe(true)
+    expect(state().pasteText(foreign)).toEqual({ ok: true, count: 1, skipped: 1 })
     expect(state().placements.map((p) => p.partId)).toEqual(['bracket'])
   })
 
-  it('is said out loud', () => {
-    state().pasteText(foreign)
-    expect(state().status).toMatch(/1 part not in this library/)
+  it('is counted, so it can be said out loud', () => {
+    const result = state().pasteText(foreign)
+    expect(pasteNotice(result)).toMatch(/1 part not in this library/)
   })
 
-  it('leaves nothing behind and explains itself when none of it is known', () => {
+  it('leaves nothing behind when none of it is known, and is still a paste', () => {
     const alien = encodeClipping([
       { partId: 'from-another-fork', col: 0, row: 0, orientation: 'flat' },
     ])
-    expect(state().pasteText(alien)).toBe(true)
+    // `ok` is about whether the text was ours, not whether anything landed:
+    // this clipping was consumed, and the gesture is not passed on.
+    const result = state().pasteText(alien)
+    expect(result).toEqual({ ok: true, count: 0, skipped: 1 })
     expect(state().placements).toEqual([])
-    expect(state().status).toMatch(/Nothing in that copy/)
+    expect(pasteNotice(result)).toMatch(/Nothing in that copy/)
   })
 
   it('says nothing at all when the whole paste was fine', () => {
     build({ partId: 'bracket', col: 4, row: 0 })
-    state().pasteText(state().copySelection()!)
-    expect(state().status).toBeNull()
+    const result = state().pasteText(state().copySelection()!)
+    expect(result).toEqual({ ok: true, count: 1, skipped: 0 })
+    expect(pasteNotice(result)).toBeNull()
   })
 })
 
@@ -198,9 +203,12 @@ describe('text that is not a clipping', () => {
   it('is refused, and changes nothing', () => {
     build({ partId: 'bracket', col: 4, row: 0 })
 
-    expect(state().pasteText('https://example.com')).toBe(false)
-    expect(state().pasteText('{"v":1,"w":[32,32],"d":[],"p":[],"a":[]}')).toBe(false)
+    expect(state().pasteText('https://example.com')).toEqual({ ok: false })
+    expect(state().pasteText('{"v":1,"w":[32,32],"d":[],"p":[],"a":[]}')).toEqual({ ok: false })
     expect(cols()).toEqual([4])
-    expect(state().status).toBeNull()
+  })
+
+  it('is not something to comment on — the gesture was never ours', () => {
+    expect(pasteNotice({ ok: false })).toBeNull()
   })
 })

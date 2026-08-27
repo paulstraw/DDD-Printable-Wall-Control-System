@@ -144,7 +144,6 @@ export function BomPanel() {
               fetched from jsDelivr and zipped in your browser. Filament assumes solid parts,
               so it is an upper bound.
             </p>
-            {status.phase === 'error' ? <p className="bom-error">{status.message}</p> : null}
           </div>
         </>
       )}
