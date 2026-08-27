@@ -216,3 +216,53 @@ describe('placement ids', () => {
     expect(state().placements.map((p) => p.id)).toEqual(before)
   })
 })
+
+describe('painting a part', () => {
+  /**
+   * The claim colour is built on: because a colour lives on the placement,
+   * painting is an edit to `placements`, and the subscription that watches
+   * `placements` records it without a line of code written for colour.
+   *
+   * There is no `paintSelection` yet — this writes the placements array the
+   * way that action will, which is the point: any route that replaces the
+   * array is on the stack, and any route that does not is off it.
+   */
+  const paint = (color: string) =>
+    useStore.setState({ placements: state().placements.map((p) => ({ ...p, color })) })
+
+  it('lands on the undo stack with no code of its own', () => {
+    place(1)
+    const before = state().history.past.length
+    paint('#ff0000')
+    expect(state().history.past.length).toBe(before + 1)
+  })
+
+  it('is undone back to unpainted, not to some other colour', () => {
+    place(1)
+    paint('#ff0000')
+    expect(state().placements[0]?.color).toBe('#ff0000')
+
+    state().undo()
+    expect(state().placements[0]?.color).toBeUndefined()
+    // The part itself is still there — a paint is an edit, not a replacement.
+    expect(cols()).toEqual([1])
+  })
+
+  it('is redone', () => {
+    place(1)
+    paint('#ff0000')
+    state().undo()
+    state().redo()
+    expect(state().placements[0]?.color).toBe('#ff0000')
+  })
+
+  it('steps back one paint at a time', () => {
+    place(1)
+    paint('#ff0000')
+    paint('#0000ff')
+    state().undo()
+    expect(state().placements[0]?.color).toBe('#ff0000')
+    state().undo()
+    expect(state().placements[0]?.color).toBeUndefined()
+  })
+})

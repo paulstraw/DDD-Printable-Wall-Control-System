@@ -105,6 +105,22 @@ export interface Placement {
    * building the wall knows which.
    */
   readonly orientation: Orientation
+  /**
+   * What this one is painted, if anyone said.
+   *
+   * Beside `orientation` for the same reason it is: the same blank is
+   * legitimately black here and red there, and only the person building the
+   * wall knows which. Being on the placement is also what buys undo — history
+   * watches `placements` change, so painting a selection lands on the stack
+   * with no code written for it. A colour kept in a side map keyed by
+   * placement id would be silently skipped by ⌘Z, and nothing would say so.
+   *
+   * Absent is the common case and does not mean grey. It means *whatever the
+   * wall's default is*, so changing that default repaints every part that
+   * never asked for anything else — see `resolveColor` in core, which is the
+   * only place that rule is written down.
+   */
+  readonly color?: string
 }
 
 /**
@@ -763,6 +779,12 @@ export const useStore = create<State>((set, get) => ({
         col: p.col,
         row: p.row,
         orientation: p.orientation,
+        // Spread rather than always writing the key, so an unpainted
+        // placement stays unpainted in the document instead of being stamped
+        // with `undefined` — which `JSON.stringify` drops anyway, but which
+        // would make an unpainted part stop comparing equal to one built by
+        // hand along the way.
+        ...(p.color === undefined ? {} : { color: p.color }),
       })),
       assemblies,
       // The store does not own colors yet, so every wall it snapshots is at
