@@ -195,6 +195,82 @@ Three things are less obvious than they look:
   unknown is inert — nothing renders it, the marquee cannot catch it, it cannot be clicked —
   so it is litter you can neither see nor remove.
 
+### Colors are inherited, not stamped
+
+You pick three colors for the wall — the viewport background, the panel finish, and what a
+part is printed in — and you can paint any selection on top of that. All four travel in the
+document, so a share link reproduces the sender's scheme rather than approximating it.
+
+**A placement stores a color only when someone paints it.** Everything else means *whatever
+the default is*, and repaints when the default changes. Set the whole wall to black, then
+pick out three shelves in red: the three carry a color, the other fifty-seven carry none.
+Stamping today's default onto every part instead would have been easier to write and wrong to
+live with — the two look identical the instant you press them and diverge the moment you
+change your mind, with fifty-seven parts frozen at last week's grey. It is why the picker's
+reset *removes* the color rather than setting one, and why `resolveColor` is the only place
+in the codebase that decides what an unpainted part is: the scene draws with it and the print
+list bills with it, and a wall that rendered black while its BOM said grey would be worse
+than either answer alone.
+
+The color lives on the `Placement`, beside `orientation`, for the reason orientation is there
+— the same blank is legitimately black here and red there. That also buys undo for nothing:
+history is a subscription watching `placements`, so painting lands on the stack with no code
+written for it, where a color kept in a side map keyed by placement id would have been
+silently skipped by <kbd>⌘Z</kbd>. The wall's own three colors are the other half of the
+asymmetry the wall *size* already has — changing one makes no history entry, because you do
+not undo your way out of choosing a panel finish, but a moment carries them so undoing an
+import cannot leave your parts wearing a stranger's scheme.
+
+**A copied bay keeps its colors; a saved assembly drops them.** Both are the same group of
+parts rebased onto their own corner, and they want opposite answers. A paste is a duplicate —
+one that came back grey would be a bug. An assembly is a template: "my drill station" is a
+shape worth keeping, and dropping it onto a wall six months from now should give it that
+wall's colors rather than dragging last spring's red along. The difference is intent rather
+than encoding, so it is expressed exactly once, in `createAssembly`, and the rebasing both of
+them share stays a change of coordinates with no opinion about paint.
+
+**The print list splits by color, and fasteners inherit.** A part printed in two colors is two
+print jobs, so it is two lines with their own quantities and weights, and the footer totals
+filament per color — the question being "have I got enough of the main one". A pin billed by a
+red spacer bills as red, because that is how you would really print it: the spacer and its
+pins come off the bed in one filament. The ZIP is untouched by all of this, since color splits
+a job and not a file.
+
+Preset colors have names, and the names are a lookup rather than a stored value: documents
+hold hex, so renaming a preset renames it on every wall already saved. A color nobody named
+prints as its hex, which is honest about being one the planner has no word for — better than
+guessing "Brown" at someone about to spend a spool on it.
+
+Selection stopped repainting parts to make room for all this. A selected part used to be
+painted orange outright, which breaks twice over once parts carry their own colors: you cannot
+see the color you just applied, and a part actually printed in orange looks permanently
+selected. It wears a two-tone outline instead — a thick dark ring with a thinner accent one
+inside it, because a single dark ring vanishes against a dark background and a single orange
+one vanishes against an orange part. Orange stays the app's one word for "active", shared with
+the drag ghost, the marquee and the section handle.
+
+### Every control is Base UI, behind one directory
+
+The DOM controls — toggle groups, the wall-size number field, the colors popover, toasts,
+fields and toolbars — come from [Base UI](https://base-ui.com), wrapped in
+`packages/app/src/components`. **Nothing outside that directory imports it.** The rule is a
+convention documented at the seam rather than a lint rule, because this project has
+deliberately gone without a linter; the point is that a library on a monthly minor cadence can
+only ever cost a day's work in one known place.
+
+The wrappers are styled pass-through: Base UI's own compound parts with this app's classes
+attached, typed as `ComponentProps<typeof …>` so the seam cannot drift from what it wraps.
+They do not invent app-shaped APIs, because a narrowed wrapper grows a prop every time a
+caller wants something it did not anticipate and each one is a guess about what the library
+meant.
+
+Two things came free and are worth naming. A toolbar makes each header cluster one tab stop
+with arrow keys inside it, and keeps focus on Undo when the history runs out instead of
+dropping it at the moment you are most likely to want Redo. And toasts retired a real
+workaround: the header used to have one slot for a message and three components with something
+to put in it, so the message lived in the store and the second one silently replaced the
+first — share a link, then import a file, and the confirmation you were reading was gone.
+
 ---
 
 ## Running it
