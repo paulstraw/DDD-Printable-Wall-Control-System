@@ -190,12 +190,6 @@ kbd {
   margin-left: -0.3rem;
 }
 
-.orientation-toggle button.is-current {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
-}
-
 .viewport {
   flex: 1;
   min-height: 0;
@@ -936,12 +930,6 @@ canvas {
 
 .section-axes button + button {
   margin-left: -1px;
-}
-
-.section-axes button.is-current {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
 }
 
 /*

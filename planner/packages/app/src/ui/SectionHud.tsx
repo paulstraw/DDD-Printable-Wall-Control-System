@@ -1,4 +1,5 @@
 import type { Axis } from '@ddd-planner/core'
+import { Toggle, ToggleGroup } from '../components'
 import { useStore } from '../store'
 
 const AXES: Axis[] = ['x', 'y', 'z']
@@ -37,20 +38,22 @@ export function SectionHud() {
 
   return (
     <div className="section-hud">
-      <span className="section-axes" role="group" aria-label="Section axis">
+      <ToggleGroup<Axis>
+        className="section-axes"
+        aria-label="Section axis"
+        value={[axis]}
+        // There is always a cut along some axis, so pressing the pressed
+        // button — which arrives as an empty array — leaves it where it is.
+        onValueChange={([chosen]) => {
+          if (chosen !== undefined) setSectionAxis(chosen)
+        }}
+      >
         {AXES.map((a) => (
-          <button
-            key={a}
-            type="button"
-            className={a === axis ? 'is-current' : undefined}
-            aria-pressed={a === axis}
-            title={TITLE[a]}
-            onClick={() => setSectionAxis(a)}
-          >
+          <Toggle key={a} value={a} title={TITLE[a]}>
             {LABEL[a]}
-          </button>
+          </Toggle>
         ))}
-      </span>
+      </ToggleGroup>
 
       <button
         type="button"

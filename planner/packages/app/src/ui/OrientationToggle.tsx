@@ -1,4 +1,5 @@
 import type { Orientation } from '@ddd-planner/core'
+import { Toggle, ToggleGroup } from '../components'
 import { orientationsOf, partById, useStore } from '../store'
 
 const LABEL: Record<Orientation, string> = {
@@ -39,23 +40,32 @@ export function OrientationToggle() {
   // With a mixed selection neither button is "the" current state, so neither
   // is pressed and either one is a move that makes the whole group agree.
   const orientations = new Set(turnable.map((p) => p.orientation))
-  const current = orientations.size === 1 ? [...orientations][0] : null
+  // `?? null` only to fold away the `undefined` an indexed read carries;
+  // the size check has already established there is one.
+  const current = orientations.size === 1 ? ([...orientations][0] ?? null) : null
 
   return (
-    <span className="orientation-toggle" role="group" aria-label="Mounting">
+    <ToggleGroup<Orientation>
+      className="orientation-toggle"
+      aria-label="Mounting"
+      // A mixed selection is the empty array — nothing pressed, which is the
+      // whole reason the group's value is a list rather than one orientation.
+      value={current === null ? [] : [current]}
+      onValueChange={([chosen]) => {
+        // Pressing the button that is already pressed asks a toggle group to
+        // unpress it, and arrives here as an empty array. Ignore it: a
+        // placement is always mounted one way or the other, so "neither" is
+        // not a state anything can be put into. Nothing re-renders, because
+        // the group is controlled and its value has not changed.
+        if (chosen !== undefined) setOrientation(chosen)
+      }}
+    >
       {(['flat', 'shelf'] as const).map((orientation) => (
-        <button
-          key={orientation}
-          type="button"
-          className={orientation === current ? 'is-current' : undefined}
-          aria-pressed={orientation === current}
-          title={TITLE[orientation]}
-          onClick={() => setOrientation(orientation)}
-        >
+        <Toggle key={orientation} value={orientation} title={TITLE[orientation]}>
           {LABEL[orientation]}
-        </button>
+        </Toggle>
       ))}
       <kbd>R</kbd>
-    </span>
+    </ToggleGroup>
   )
 }
