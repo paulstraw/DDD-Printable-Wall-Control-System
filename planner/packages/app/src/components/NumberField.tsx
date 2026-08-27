@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react'
 import { NumberField as BaseNumberField } from '@base-ui/react/number-field'
+import { NO_AUTOFILL } from './Input'
 import { withClass } from './withClass'
 
 /**
@@ -25,8 +26,19 @@ function Group({ className, ...props }: ComponentProps<typeof BaseNumberField.Gr
   return <BaseNumberField.Group className={withClass('number-field-group', className)} {...props} />
 }
 
+/**
+ * The reason `NO_AUTOFILL` exists — see `Input.tsx`. Base UI parses numbers
+ * itself, so this renders `type="text"`, and a text input is what a password
+ * manager comes looking for.
+ */
 function Input({ className, ...props }: ComponentProps<typeof BaseNumberField.Input>) {
-  return <BaseNumberField.Input className={withClass('number-field-input', className)} {...props} />
+  return (
+    <BaseNumberField.Input
+      {...NO_AUTOFILL}
+      className={withClass('number-field-input', className)}
+      {...props}
+    />
+  )
 }
 
 function Increment({ className, ...props }: ComponentProps<typeof BaseNumberField.Increment>) {
