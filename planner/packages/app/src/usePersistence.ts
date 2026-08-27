@@ -46,7 +46,9 @@ export function usePersistence(): [note: string | null, dismiss: () => void] {
       return
     }
 
-    hydrate(result.state)
+    // The beginning: nothing preceded it, so it is not somewhere undo can
+    // take you back from.
+    hydrate(result.state, { beginning: true })
 
     if (fromLink) {
       // Consume the link so editing and reloading does not revert.

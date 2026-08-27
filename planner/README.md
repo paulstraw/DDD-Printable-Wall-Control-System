@@ -129,6 +129,33 @@ community `Tool_hooks` folder, 2.4% of the library. Two more parts are recorded 
 claims and prints what disagrees. It applies the overrides and reports what remains, so it is a
 regression check rather than a one-off.
 
+### Undo remembers moments, not actions
+
+<kbd>⌘Z</kbd> / <kbd>Ctrl+Z</kbd>, with buttons in the header beside Import — which is the
+one control here that discards an hour of work without asking.
+
+History holds **the parts on the wall**: added, removed, moved, turned. Not the wall size,
+not the assembly library, not the selection or the cross-section. Each entry is a *moment* —
+the placements exactly as they stood, with their ids intact. That last part is the whole
+design: every model on screen is keyed by placement id, the selection names them, and a
+dismissed issue's id is built out of them, so a history that re-issued ids would remount the
+entire wall to undo moving one bracket.
+
+Two consequences worth knowing before they surprise you:
+
+- **A resize makes no entry, but a moment carries the board it stood on.** You cannot undo
+  your way out of typing a wall size — but undoing an *import* puts your parts back on the
+  wall they were on, rather than stranding them on the imported one. The cost is that undoing
+  far enough back past a resize takes the old size with it.
+- **A held arrow key is one undo.** `KeyboardEvent.repeat` says whether the user pressed the
+  key or the OS did, so sliding a part across the wall costs one step rather than thirty.
+
+Nothing calls `record()`. Entries are pushed by a subscription watching `placements` change,
+because the alternative fails *silently*: an action added later that forgot its record call
+would leave undo quietly skipping it, surfacing months later as "sometimes Ctrl+Z jumps too
+far back". Recording is the default and switching it off is something you write on purpose —
+which happens in exactly two places, the arrival restore and a repeating key.
+
 ---
 
 ## Running it
@@ -140,7 +167,7 @@ npm run index     # build the part library from the STLs (~17s)
 npm run dev
 ```
 
-`npm test` runs 494 tests across the three packages. `npm run typecheck` covers all three under
+`npm test` runs 545 tests across the three packages. `npm run typecheck` covers all three under
 `strict` plus `noUncheckedIndexedAccess`.
 
 ### The spike check

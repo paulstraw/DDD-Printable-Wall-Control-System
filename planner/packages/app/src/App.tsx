@@ -11,6 +11,7 @@ import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
 import { OrientationToggle } from './ui/OrientationToggle'
 import { SaveAssembly } from './ui/SaveAssembly'
+import { UndoRedo } from './ui/UndoRedo'
 import { WallActions } from './ui/WallActions'
 import { WallSizeControls } from './ui/WallSizeControls'
 
@@ -41,6 +42,7 @@ export function App() {
           {slotColumnCount(board)} × {slotRowCount(board)} slots · {placements.length} placed
         </span>
         <SaveAssembly />
+        <UndoRedo />
         <WallActions />
         {restoreNote ? (
           <button
@@ -74,7 +76,8 @@ export function App() {
           ) : (
             <>
               drag a part onto the wall · <kbd>⇧</kbd>click or <kbd>⇧</kbd>drag to
-              select · <kbd>F</kbd> to face it · <kbd>C</kbd> to cut
+              select · <kbd>F</kbd> to face it · <kbd>C</kbd> to cut ·{' '}
+              <kbd>⌘Z</kbd> to undo
             </>
           )}
         </span>

@@ -24,6 +24,14 @@ import {
   slotRowCount,
   uniqueAssemblyName,
 } from '@ddd-planner/core'
+import {
+  EMPTY_HISTORY,
+  type History,
+  type Moment,
+  record,
+  redo as redoFrom,
+  undo as undoFrom,
+} from './history'
 import { DEFAULT_DEPTH_MM, hiddenBySection, sectionPlane } from './scene/section'
 
 export interface CatalogPart {
@@ -175,8 +183,15 @@ interface State {
 
   /** Everything worth saving, sharing or exporting. */
   snapshot: () => PlannerState
-  /** Replace the whole wall — a restored autosave, a link, an imported file. */
-  hydrate: (state: PlannerState) => void
+  /**
+   * Replace the whole wall — a restored autosave, a link, an imported file.
+   *
+   * `beginning` marks the restore that happens on arrival. There is nothing
+   * before the beginning, so it is the one wholesale replacement that must
+   * not be undoable; an import, which discards an hour's work with no
+   * confirmation, very much is.
+   */
+  hydrate: (state: PlannerState, options?: { readonly beginning?: boolean }) => void
 
   /**
    * Issues the user has waved away. Kept for the session only — they are a
@@ -204,9 +219,25 @@ interface State {
   beginMarquee: (point: Point2, selecting: boolean) => void
   updateMarquee: (point: Point2) => void
   endMarquee: () => void
-  nudge: (dCol: number, dRow: number) => void
+  /**
+   * Move the selection by whole slots.
+   *
+   * `repeat` is the browser's own `KeyboardEvent.repeat`: the parts move,
+   * but no history entry is pushed. A held arrow key is one gesture and
+   * should cost one undo, not the thirty the OS generated it out of.
+   */
+  nudge: (dCol: number, dRow: number, repeat?: boolean) => void
   removeSelected: () => void
   clear: () => void
+
+  /**
+   * Where the wall has been. See `history.ts` — and note that nothing here
+   * calls `record`: entries are pushed by watching `placements` change, so
+   * an action added later cannot silently fall out of history.
+   */
+  history: History
+  undo: () => void
+  redo: () => void
 }
 
 /**
@@ -307,6 +338,40 @@ const MARQUEE_MIN_AREA_MM2 = 16
 let nextId = 1
 let nextAssemblyId = 1
 
+/**
+ * Whether a change to `placements` should be remembered.
+ *
+ * History is recorded by *watching* the store, not by asking each action to
+ * remember to record — see the subscription at the foot of this file. That
+ * inverts which way the mistake goes. Under the obvious design, an action
+ * added later that forgot its `record()` call would fail silently: nothing
+ * throws, nothing looks wrong, and the bug arrives months later as "sometimes
+ * undo jumps too far back". Here recording is the default, and switching it
+ * off is something you have to write on purpose.
+ *
+ * Exactly two things switch it off, and both say why at the call site.
+ */
+let recording = true
+
+function withoutHistory(apply: () => void): void {
+  recording = false
+  try {
+    apply()
+  } finally {
+    recording = true
+  }
+}
+
+/** The wall as it stands, for the history stack to hold on to. */
+function momentOf(state: State): Moment {
+  return {
+    widthIn: state.widthIn,
+    heightIn: state.heightIn,
+    placements: state.placements,
+    selectedIds: state.selectedIds,
+  }
+}
+
 export const useStore = create<State>((set, get) => ({
   board: createBoard(32, 32),
   widthIn: 32,
@@ -324,6 +389,7 @@ export const useStore = create<State>((set, get) => ({
   marquee: null,
   assemblies: [],
   dismissedIssues: [],
+  history: EMPTY_HISTORY,
 
   // Opens on Y at 0: the plane of the board's front face, where the wall
   // side and the room part company.
@@ -509,7 +575,7 @@ export const useStore = create<State>((set, get) => ({
     })
   },
 
-  nudge: (dCol, dRow) => {
+  nudge: (dCol, dRow, repeat = false) => {
     const { selectedIds, placements, catalog, board } = get()
     if (selectedIds.length === 0) return
 
@@ -529,11 +595,12 @@ export const useStore = create<State>((set, get) => ({
     if (move.dCol === 0 && move.dRow === 0) return
 
     const moving = new Set(selectedIds)
-    set({
-      placements: placements.map((p) =>
-        moving.has(p.id) ? { ...p, col: p.col + move.dCol, row: p.row + move.dRow } : p,
-      ),
-    })
+    const shifted = placements.map((p) =>
+      moving.has(p.id) ? { ...p, col: p.col + move.dCol, row: p.row + move.dRow } : p,
+    )
+    // The OS repeating a held key is still the one gesture the user started.
+    if (repeat) withoutHistory(() => set({ placements: shifted }))
+    else set({ placements: shifted })
   },
 
   removeSelected: () => {
@@ -560,8 +627,8 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  hydrate: (state) =>
-    set({
+  hydrate: (state, options) => {
+    const next = {
       widthIn: state.widthIn,
       heightIn: state.heightIn,
       board: createBoard(state.widthIn, state.heightIn),
@@ -573,10 +640,68 @@ export const useStore = create<State>((set, get) => ({
       marquee: null,
       dragging: null,
       hoverSlot: null,
-    }),
+    }
+    if (options?.beginning) withoutHistory(() => set({ ...next, history: EMPTY_HISTORY }))
+    else set(next)
+  },
 
   clear: () => set({ placements: [], selectedIds: [], marquee: null }),
+
+  undo: () => {
+    const state = get()
+    const step = undoFrom(state.history, momentOf(state))
+    if (step) restore(set, step.moment, step.history)
+  },
+
+  redo: () => {
+    const state = get()
+    const step = redoFrom(state.history, momentOf(state))
+    if (step) restore(set, step.moment, step.history)
+  },
 }))
+
+/**
+ * Put a moment back on the wall.
+ *
+ * The board is rebuilt rather than stored, for the same reason `setWallSize`
+ * rebuilds it: `widthIn`/`heightIn` are the truth and `board` is derived, and
+ * two copies of a fact eventually disagree.
+ *
+ * Copying the arrays keeps the moment's own frozen — a moment that shared a
+ * mutable array with the live store would quietly change under the stack.
+ */
+function restore(
+  set: (partial: Partial<State>) => void,
+  moment: Moment,
+  history: History,
+): void {
+  withoutHistory(() =>
+    set({
+      widthIn: moment.widthIn,
+      heightIn: moment.heightIn,
+      board: createBoard(moment.widthIn, moment.heightIn),
+      placements: [...moment.placements],
+      selectedIds: [...moment.selectedIds],
+      history,
+    }),
+  )
+}
+
+/**
+ * The only thing that writes history.
+ *
+ * `placements` alone is the trigger. A resize does not make an entry — you do
+ * not undo your way out of typing a wall size — but the moment still carries
+ * the size, so undo never leaves you at an instant with the wrong board under
+ * it.
+ *
+ * Writing to the store from inside its own subscriber re-enters here once
+ * more; the identity check turns that second pass straight back around.
+ */
+useStore.subscribe((state, previous) => {
+  if (!recording || state.placements === previous.placements) return
+  useStore.setState({ history: record(previous.history, momentOf(previous)) })
+})
 
 /** Column span, which the turn does not change — it is about the wall X axis. */
 function spanColsOf(

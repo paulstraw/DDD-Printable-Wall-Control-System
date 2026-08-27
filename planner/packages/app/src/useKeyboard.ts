@@ -10,7 +10,8 @@ function isTyping(target: EventTarget | null): boolean {
 /**
  * Arrow keys nudge the selection by one slot; Delete removes it; R turns it
  * between flat and shelf; C cuts a cross-section through the wall; Cmd/Ctrl+A
- * takes everything; Escape deselects or abandons a drag.
+ * takes everything; Cmd/Ctrl+Z steps back and Cmd/Ctrl+Shift+Z steps forward;
+ * Escape deselects or abandons a drag.
  *
  * A nudge is a whole slot, not a pixel — there is nowhere else a part can go,
  * so free movement would only ever be undone by the snap. Every one of these
@@ -25,31 +26,51 @@ export function useKeyboard() {
   const selectAll = useStore((s) => s.selectAll)
   const setOrientation = useStore((s) => s.setOrientation)
   const toggleSection = useStore((s) => s.toggleSection)
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (isTyping(event.target)) return
 
-      // Cmd/Ctrl+A, before the plain-key switch so the browser's own
+      // The modifier keys, before the plain-key switch, so the browser's own
       // select-all never fires over the canvas.
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
-        selectAll()
+      if (event.metaKey || event.ctrlKey) {
+        switch (event.key.toLowerCase()) {
+          case 'a':
+            selectAll()
+            break
+          case 'z':
+            // Shift+Z is redo everywhere; Ctrl+Y is how Windows spells the
+            // same thing, and costs one line to honour.
+            if (event.shiftKey) redo()
+            else undo()
+            break
+          case 'y':
+            redo()
+            break
+          default:
+            return
+        }
         event.preventDefault()
         return
       }
 
       switch (event.key) {
+        // `event.repeat` is the OS generating keydowns while the key is
+        // held. The parts still move; history just does not count each one,
+        // so sliding a part across the wall costs one undo rather than thirty.
         case 'ArrowLeft':
-          nudge(-1, 0)
+          nudge(-1, 0, event.repeat)
           break
         case 'ArrowRight':
-          nudge(1, 0)
+          nudge(1, 0, event.repeat)
           break
         case 'ArrowUp':
-          nudge(0, 1)
+          nudge(0, 1, event.repeat)
           break
         case 'ArrowDown':
-          nudge(0, -1)
+          nudge(0, -1, event.repeat)
           break
         case 'Delete':
         case 'Backspace':
@@ -68,9 +89,9 @@ export function useKeyboard() {
         }
         case 'c':
         case 'C':
-          // Cmd/Ctrl+C is copy, and taking it would be a poor trade for a
-          // debug overlay.
-          if (event.metaKey || event.ctrlKey) return
+          // Bare C only. Cmd/Ctrl+C is copy and never reaches here — the
+          // modifier switch above returns first — which is the trade this
+          // always meant to make.
           toggleSection()
           break
         case 'Escape':
@@ -85,5 +106,5 @@ export function useKeyboard() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation, toggleSection])
+  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation, toggleSection, undo, redo])
 }
