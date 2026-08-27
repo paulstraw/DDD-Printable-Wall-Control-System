@@ -33,40 +33,40 @@ export const CODE_FOR: Record<Orientation, number> = { flat: 0, shelf: 1 }
 
 /**
  * The compact form of a placement: `[index, a, b]`, with orientation appended
- * only when it is not flat, and a colour after that only when the part has
+ * only when it is not flat, and a color after that only when the part has
  * been painted.
  *
- * `colour` is an index into the document's colour dictionary, not a hex
+ * `color` is an index into the document's color dictionary, not a hex
  * string — the same trick the part ids use, and for the same reason. A wall
- * painted in three colours pays for those three strings once instead of once
+ * painted in three colors pays for those three strings once instead of once
  * per part.
  *
  * Absent means unpainted, which is not the same as painted the default
- * colour: an unpainted part follows the wall's default and repaints when the
- * default changes, and that is the whole of the colour model in one sentence.
+ * color: an unpainted part follows the wall's default and repaints when the
+ * default changes, and that is the whole of the color model in one sentence.
  */
 export function writeRow(
   index: number,
   a: number,
   b: number,
   orientation: Orientation,
-  colour: number | null = null,
+  color: number | null = null,
 ): number[] {
   // Omitting the common case is what keeps a share link the length it was: a
   // wall with no shelves and no paint encodes to exactly the bytes it did
-  // before colours existed, which is the point of doing it this way round.
-  if (colour === null) {
+  // before colors existed, which is the point of doing it this way round.
+  if (color === null) {
     return orientation === 'flat' ? [index, a, b] : [index, a, b, CODE_FOR[orientation]]
   }
-  // A colour has to sit in the fifth slot, so the fourth cannot be skipped
+  // A color has to sit in the fifth slot, so the fourth cannot be skipped
   // even when it is flat. Position is the only thing telling these apart.
-  return [index, a, b, CODE_FOR[orientation], colour]
+  return [index, a, b, CODE_FOR[orientation], color]
 }
 
 export function readTriple(
   value: unknown,
   dictSize: number,
-  colourCount: number,
+  colorCount: number,
 ): [number, number, number, Orientation, number | null] | null {
   const lengths = [3, 4, 5]
   if (!Array.isArray(value) || !lengths.includes(value.length)) return null
@@ -76,10 +76,10 @@ export function readTriple(
   // A code this version does not know is a document from the future in
   // miniature, and gets the same treatment: refused, not guessed at.
   if (o !== undefined && (!isIndex(o) || ORIENTATION_CODES[o] === undefined)) return null
-  // A colour index pointing past the end of the dictionary is the same kind of
+  // A color index pointing past the end of the dictionary is the same kind of
   // damage as an unknown orientation, and earns the same answer. Guessing
-  // would mean painting a part a colour nobody chose.
-  if (c !== undefined && (!isIndex(c) || c >= colourCount)) return null
+  // would mean painting a part a color nobody chose.
+  if (c !== undefined && (!isIndex(c) || c >= colorCount)) return null
   return [
     id,
     a,
@@ -94,7 +94,7 @@ export function readTriple(
  *
  * Written for part ids, which dominate the size of anything holding many
  * placements — a forty-character slug repeated fifty times — so both the
- * document and the clipboard pay for each one once. Colours want exactly the
+ * document and the clipboard pay for each one once. Colors want exactly the
  * same treatment for exactly the same reason, so they use exactly the same
  * thing; nothing here was ever specific to ids beyond the parameter name.
  */

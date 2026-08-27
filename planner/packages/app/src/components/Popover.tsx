@@ -5,7 +5,7 @@ import { withClass } from './withClass'
 /**
  * A panel hung off a button.
  *
- * The colour controls are the first thing in this app that needs one: three
+ * The color controls are the first thing in this app that needs one: three
  * swatch rows is more than fits in the header, and a modal dialog is the wrong
  * shape for a control you want to keep open while watching the wall change
  * behind it.
@@ -18,7 +18,7 @@ import { withClass } from './withClass'
  *
  * No `Backdrop`. A backdrop is for a popup that must be dealt with before
  * anything else, and this one is the opposite — the whole point is to change a
- * colour and see the wall respond, which means the wall stays live underneath.
+ * color and see the wall respond, which means the wall stays live underneath.
  */
 function Root(props: ComponentProps<typeof BasePopover.Root>) {
   return <BasePopover.Root {...props} />

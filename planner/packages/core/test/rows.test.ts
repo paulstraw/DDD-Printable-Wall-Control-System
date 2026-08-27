@@ -22,28 +22,28 @@ describe('writing a row', () => {
     expect(writeRow(2, 1, 1, 'shelf')).toEqual([2, 1, 1, 1])
   })
 
-  it('appends a colour after the orientation', () => {
+  it('appends a color after the orientation', () => {
     expect(writeRow(2, 1, 1, 'shelf', 3)).toEqual([2, 1, 1, 1, 3])
   })
 
-  it('spells out a flat orientation when a colour follows it', () => {
+  it('spells out a flat orientation when a color follows it', () => {
     // Position is the only thing distinguishing these fields, so the fourth
     // slot cannot be skipped once the fifth is occupied.
     expect(writeRow(7, 0, 0, 'flat', 0)).toEqual([7, 0, 0, 0, 0])
   })
 
-  it('treats colour zero as a colour, not as absent', () => {
-    // The first colour in the dictionary indexes to 0, and 0 is falsy. A
+  it('treats color zero as a color, not as absent', () => {
+    // The first color in the dictionary indexes to 0, and 0 is falsy. A
     // truthiness check anywhere in here would silently unpaint it.
     expect(writeRow(1, 2, 3, 'flat', 0)).toHaveLength(5)
   })
 })
 
-describe('the bytes a wall without colours encodes to', () => {
+describe('the bytes a wall without colors encodes to', () => {
   /**
-   * The claim that has to hold across this change: adding colours cost
+   * The claim that has to hold across this change: adding colors cost
    * existing walls nothing. Every row below is what the codec emitted before
-   * the colour slot existed, character for character.
+   * the color slot existed, character for character.
    */
   it('is unchanged, character for character', () => {
     const rows = [
@@ -55,22 +55,22 @@ describe('the bytes a wall without colours encodes to', () => {
     expect(JSON.stringify(rows)).toBe('[[0,12,8],[1,12,8,1],[2,15,8],[1,13,4,1]]')
   })
 
-  it('is unchanged when the colour is passed explicitly as absent', () => {
+  it('is unchanged when the color is passed explicitly as absent', () => {
     expect(JSON.stringify(writeRow(0, 12, 8, 'flat', null))).toBe('[0,12,8]')
   })
 })
 
 describe('reading a row back', () => {
   it('round-trips every combination of orientation and paint', () => {
-    const cases: Array<[orientation: Orientation, colour: number | null]> = [
+    const cases: Array<[orientation: Orientation, color: number | null]> = [
       ['flat', null],
       ['shelf', null],
       ['flat', 0],
       ['shelf', 2],
     ]
-    for (const [orientation, colour] of cases) {
-      const row = writeRow(1, 6, 7, orientation, colour)
-      expect(readTriple(row, 4, 3)).toEqual([1, 6, 7, orientation, colour])
+    for (const [orientation, color] of cases) {
+      const row = writeRow(1, 6, 7, orientation, color)
+      expect(readTriple(row, 4, 3)).toEqual([1, 6, 7, orientation, color])
     }
   })
 
@@ -91,14 +91,14 @@ describe('reading a row back', () => {
     expect(readTriple([0, 1, 2, 2], 1, 0)).toBeNull()
   })
 
-  it('refuses a colour index the dictionary does not reach', () => {
-    // Two colours means 0 and 1. Asking for 2 is a document describing a
-    // colour it did not bring with it.
+  it('refuses a color index the dictionary does not reach', () => {
+    // Two colors means 0 and 1. Asking for 2 is a document describing a
+    // color it did not bring with it.
     expect(readTriple([0, 1, 2, 0, 2], 1, 2)).toBeNull()
     expect(readTriple([0, 1, 2, 0, 0], 1, 0)).toBeNull()
   })
 
-  it('refuses a colour that is not an index at all', () => {
+  it('refuses a color that is not an index at all', () => {
     expect(readTriple([0, 1, 2, 0, -1], 1, 2)).toBeNull()
     expect(readTriple([0, 1, 2, 0, 1.5], 1, 2)).toBeNull()
     expect(readTriple([0, 1, 2, 0, '#ff0000'], 1, 2)).toBeNull()

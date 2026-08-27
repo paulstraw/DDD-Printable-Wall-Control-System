@@ -129,7 +129,7 @@ export function decodeDocument(text: string): DecodeResult {
 
   const placements: PlacedRef[] = []
   for (const entry of placementsRaw) {
-    // No colour dictionary in this format yet, so a row claiming a colour is
+    // No color dictionary in this format yet, so a row claiming a color is
     // pointing at nothing and is refused along with the rest of the damage.
     const triple = readTriple(entry, ids.length, 0)
     // One bad row means the file is not what it claims. Silently dropping it
