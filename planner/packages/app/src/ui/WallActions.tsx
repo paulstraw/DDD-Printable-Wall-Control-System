@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { decodeDocument, encodeDocument, unknownPartIds } from '@ddd-planner/core'
+import { Toolbar } from '../components'
 import { downloadJson, shareFragmentFor } from '../persistence'
 import { useStore } from '../store'
 import { useHasContent } from '../usePersistence'
@@ -60,16 +61,16 @@ export function WallActions() {
   }
 
   return (
-    <span className="wall-actions">
-      <button className="ghost-button" onClick={share} disabled={!hasContent}>
+    <Toolbar.Root className="wall-actions" aria-label="Wall">
+      <Toolbar.Button className="ghost-button" onClick={share} disabled={!hasContent}>
         Share link
-      </button>
-      <button className="ghost-button" onClick={exportFile} disabled={!hasContent}>
+      </Toolbar.Button>
+      <Toolbar.Button className="ghost-button" onClick={exportFile} disabled={!hasContent}>
         Export
-      </button>
-      <button className="ghost-button" onClick={() => file.current?.click()}>
+      </Toolbar.Button>
+      <Toolbar.Button className="ghost-button" onClick={() => file.current?.click()}>
         Import
-      </button>
+      </Toolbar.Button>
       <input
         ref={file}
         type="file"
@@ -83,6 +84,6 @@ export function WallActions() {
         }}
       />
       {status ? <span className="wall-status">{status}</span> : null}
-    </span>
+    </Toolbar.Root>
   )
 }

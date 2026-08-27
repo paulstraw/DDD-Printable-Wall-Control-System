@@ -90,11 +90,19 @@ body,
   cursor: pointer;
 }
 
-.ghost-button:hover:not(:disabled) {
+/*
+ * `[data-disabled]` alongside `:disabled` because a toolbar button stays
+ * focusable when disabled — which is what keeps focus on Undo when the history
+ * runs out — and pays for it by carrying `aria-disabled` rather than the
+ * native attribute. `:disabled` does not match those, so both are named here
+ * and the buttons look the same either way.
+ */
+.ghost-button:hover:not(:disabled):not([data-disabled]) {
   border-color: var(--muted);
 }
 
-.ghost-button:disabled {
+.ghost-button:disabled,
+.ghost-button[data-disabled] {
   color: var(--muted);
   cursor: default;
 }
@@ -1000,17 +1008,10 @@ canvas {
 }
 
 /*
- * Matches `.wall-actions` and `.undo-redo`, which is what a toolbar replaces.
- * The gain is behavioural — one tab stop per cluster, arrows to move within
- * it — so nothing here should move.
+ * A toolbar has no look of its own — the three clusters it serves already have
+ * one each, and keep it. Only the separator needs styling, because an unstyled
+ * separator is an invisible div.
  */
-.toolbar,
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
 .toolbar-separator {
   width: 1px;
   align-self: stretch;

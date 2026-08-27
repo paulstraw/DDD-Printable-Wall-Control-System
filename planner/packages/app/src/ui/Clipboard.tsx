@@ -1,3 +1,4 @@
+import { Button, Toolbar } from '../components'
 import { useStore } from '../store'
 
 /**
@@ -31,22 +32,22 @@ export function CopyCut() {
   }
 
   return (
-    <span className="selection-actions" role="group" aria-label="Clipboard">
-      <button
-        type="button"
+    // No class on the buttons: `.selection-actions button` already sizes them,
+    // and they are deliberately smaller than the header's `ghost-button`.
+    <Toolbar.Root className="selection-actions" aria-label="Clipboard">
+      <Toolbar.Button
         title="Copy the selection (⌘C)"
         onClick={() => void put(useStore.getState().copySelection())}
       >
         Copy
-      </button>
-      <button
-        type="button"
+      </Toolbar.Button>
+      <Toolbar.Button
         title="Cut the selection (⌘X)"
         onClick={() => void put(useStore.getState().cutSelection())}
       >
         Cut
-      </button>
-    </span>
+      </Toolbar.Button>
+    </Toolbar.Root>
   )
 }
 
@@ -82,9 +83,11 @@ export function PasteButton() {
     }
   }
 
+  // A plain button, not a toolbar item: it stands alone in the header, and a
+  // toolbar of one is a tab stop that goes nowhere.
   return (
-    <button className="ghost-button" onClick={() => void paste()} title="Paste parts (⌘V)">
+    <Button onClick={() => void paste()} title="Paste parts (⌘V)">
       Paste
-    </button>
+    </Button>
   )
 }
