@@ -47,23 +47,20 @@ body,
   gap: 0.5rem;
 }
 
-.wall-size label {
-  display: flex;
-  align-items: baseline;
+/*
+ * The number field lays out its own label, input and unit, so the spacing the
+ * `<label>` used to provide moves onto it. The input itself is styled by
+ * `.number-field-input` in the seam block below, which repeats what
+ * `.wall-size input` used to say.
+ */
+.wall-size .number-field {
   gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--muted);
+  align-items: baseline;
 }
 
-.wall-size input {
-  width: 4rem;
-  padding: 0.25rem 0.4rem;
-  font: inherit;
-  font-size: 0.85rem;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: #fff;
+.wall-size label {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .wall-size .unit,
