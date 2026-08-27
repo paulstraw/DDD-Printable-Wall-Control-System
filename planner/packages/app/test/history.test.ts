@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_COLORS } from '@ddd-planner/core'
 import {
   EMPTY_HISTORY,
   HISTORY_LIMIT,
@@ -14,6 +15,7 @@ import {
 const at = (label: string): Moment => ({
   widthIn: 32,
   heightIn: 32,
+  colors: DEFAULT_COLORS,
   placements: [{ id: label, partId: 'x', col: 0, row: 0, orientation: 'flat' }],
   selectedIds: [label],
 })

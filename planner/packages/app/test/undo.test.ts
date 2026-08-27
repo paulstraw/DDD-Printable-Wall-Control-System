@@ -332,3 +332,45 @@ describe('the wall’s own colors', () => {
     expect(state().snapshot().colors.parts).toBe('#123456')
   })
 })
+
+describe('undoing an import', () => {
+  /**
+   * The reason a moment carries the wall's context rather than only its
+   * parts. Opening someone's share link takes on their wall, their size *and*
+   * their scheme; ⌘Z has to hand back all three of yours, or your shelves
+   * come back painted in a stranger's black with nothing to say why.
+   */
+  const theirs: PlannerState = {
+    widthIn: 48,
+    heightIn: 24,
+    placements: [{ partId: 'part-a', col: 2, row: 0, orientation: 'flat', color: '#ff0000' }],
+    assemblies: [],
+    colors: { background: '#101014', panel: '#000000', parts: '#333333' },
+  }
+
+  it('gives back your parts, your wall size and your colors together', () => {
+    place(1)
+    state().setWallColor('panel', '#ffffff')
+    state().setWallSize({ widthIn: 32, heightIn: 32 })
+
+    state().hydrate(theirs)
+    expect(state().colors).toEqual(theirs.colors)
+    expect(state().placements[0]?.color).toBe('#ff0000')
+
+    state().undo()
+    expect(cols()).toEqual([1])
+    expect(state().widthIn).toBe(32)
+    expect(state().colors.panel).toBe('#ffffff')
+  })
+
+  it('redoes back onto their wall', () => {
+    place(1)
+    state().setWallColor('panel', '#ffffff')
+    state().hydrate(theirs)
+    state().undo()
+    state().redo()
+
+    expect(state().widthIn).toBe(48)
+    expect(state().colors.panel).toBe('#000000')
+  })
+})

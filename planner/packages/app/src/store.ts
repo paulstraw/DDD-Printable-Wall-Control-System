@@ -485,6 +485,7 @@ function momentOf(state: State): Moment {
   return {
     widthIn: state.widthIn,
     heightIn: state.heightIn,
+    colors: state.colors,
     placements: state.placements,
     selectedIds: state.selectedIds,
   }
@@ -853,6 +854,12 @@ export const useStore = create<State>((set, get) => ({
       widthIn: state.widthIn,
       heightIn: state.heightIn,
       board: createBoard(state.widthIn, state.heightIn),
+      // Taken wholesale, not merged. A document always carries all three —
+      // one written before colors existed decodes to the defaults — so there
+      // is no such thing as a wall that means "keep the panel you had". An
+      // import is somebody else's wall arriving entire, and half their scheme
+      // over half yours is a third thing neither of you chose.
+      colors: state.colors,
       placements: state.placements.map((p) => ({ id: `p${nextId++}`, ...p })),
       // Ids from the document are positional; re-issue them from this
       // session's counter so a later save cannot collide with them.
@@ -901,6 +908,9 @@ function restore(
       widthIn: moment.widthIn,
       heightIn: moment.heightIn,
       board: createBoard(moment.widthIn, moment.heightIn),
+      // Not copied, unlike the arrays below: `WallColors` is three strings
+      // and nothing in the store ever mutates one in place.
+      colors: moment.colors,
       placements: [...moment.placements],
       selectedIds: [...moment.selectedIds],
       history,
@@ -911,10 +921,11 @@ function restore(
 /**
  * The only thing that writes history.
  *
- * `placements` alone is the trigger. A resize does not make an entry — you do
- * not undo your way out of typing a wall size — but the moment still carries
- * the size, so undo never leaves you at an instant with the wrong board under
- * it.
+ * `placements` alone is the trigger. Neither a resize nor a change of wall
+ * color makes an entry — you do not undo your way out of typing a wall size,
+ * or out of choosing a panel finish — but the moment carries both, so undo
+ * never leaves you at an instant with the wrong board or the wrong scheme
+ * under it.
  *
  * Writing to the store from inside its own subscriber re-enters here once
  * more; the identity check turns that second pass straight back around.

@@ -19,6 +19,7 @@
  * the handful of parts that actually changed.
  */
 
+import type { WallColors } from '@ddd-planner/core'
 import type { Placement } from './store'
 
 export interface Moment {
@@ -30,6 +31,19 @@ export interface Moment {
    */
   readonly widthIn: number
   readonly heightIn: number
+  /**
+   * The wall's colors travel for exactly the same reason, and are exactly the
+   * same kind of thing: context that no action of its own records, but that
+   * an action *can* replace wholesale.
+   *
+   * Import is the case that makes it necessary. Open someone's share link and
+   * you take on their wall, their size and their scheme; press ⌘Z and you
+   * must get all three of yours back. A moment holding the parts but not the
+   * colors would hand your shelves back painted in a stranger's black, with
+   * nothing to say why — the same failure the board size had, in a different
+   * costume.
+   */
+  readonly colors: WallColors
   readonly placements: readonly Placement[]
   /**
    * What was selected at this instant — which, for a recorded moment, means
