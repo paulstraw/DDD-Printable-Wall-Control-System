@@ -27,10 +27,15 @@ export function Scene({ board }: { board: Board }) {
   const busy = useStore(
     (s) => s.dragging !== null || s.marquee?.selecting === true || s.section.dragging,
   )
+  const background = useStore((s) => s.colors.background)
 
   return (
     <>
-      <color attach="background" args={['#f4f6f8']} />
+      {/*
+        The viewport's own background, not the app's. The chrome around the
+        canvas keeps its own colours — this is a scene, not a theme.
+      */}
+      <color attach="background" args={[background]} />
       <hemisphereLight intensity={0.55} groundColor="#8b8f96" />
       <directionalLight position={[-600, -900, 1200]} intensity={1.5} />
       <directionalLight position={[700, -500, 300]} intensity={0.5} />

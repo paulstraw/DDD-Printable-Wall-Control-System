@@ -30,6 +30,11 @@ export function usePersistence(): void {
   const assemblies = useStore((s) => s.assemblies)
   const widthIn = useStore((s) => s.widthIn)
   const heightIn = useStore((s) => s.heightIn)
+  // Watched for the same reason the wall size is: it is in the document, so a
+  // change to it is a change worth writing. Leaving it out would mean a new
+  // panel colour survived only until the next reload — or worse, survived by
+  // accident whenever a part happened to move afterwards.
+  const colors = useStore((s) => s.colors)
 
   const restored = useRef(false)
 
@@ -84,7 +89,7 @@ export function usePersistence(): void {
     // An empty wall is still worth writing — it is how "I cleared it" is
     // remembered rather than being undone by the next reload.
     saveLocal(encodeDocument(state))
-  }, [placements, assemblies, widthIn, heightIn, snapshot])
+  }, [placements, assemblies, widthIn, heightIn, colors, snapshot])
 
   // The load notes describe what happened before the reader arrived, so they
   // are added with no timeout and stay until waved away — the same treatment

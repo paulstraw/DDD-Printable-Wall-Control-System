@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { BoxGeometry, Object3D } from 'three'
 import type { InstancedMesh } from 'three'
 import { PANEL_THICKNESS_MM, type Board, panelSolids } from '@ddd-planner/core'
+import { useStore } from '../store'
 
 /**
  * One rectangle of panel: one instance of this.
@@ -34,6 +35,9 @@ const UNIT_PANEL = new BoxGeometry(1, PANEL_THICKNESS_MM, 1).translate(0, PANEL_
  */
 export function Pegboard({ board }: { board: Board }) {
   const panel = useRef<InstancedMesh>(null)
+  // Wall Control sells the panel in real finishes, so this is not decoration:
+  // white, black and galvanized are things you can actually buy.
+  const panelColor = useStore((s) => s.colors.panel)
 
   const solids = useMemo(() => panelSolids(board), [board])
 
@@ -54,7 +58,7 @@ export function Pegboard({ board }: { board: Board }) {
 
   return (
     <instancedMesh key={solids.length} ref={panel} args={[UNIT_PANEL, undefined, solids.length]}>
-      <meshStandardMaterial color="#a8aeb7" roughness={0.85} metalness={0} />
+      <meshStandardMaterial color={panelColor} roughness={0.85} metalness={0} />
     </instancedMesh>
   )
 }
