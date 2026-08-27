@@ -24,7 +24,7 @@ import {
   slotRowCount,
   uniqueAssemblyName,
 } from '@ddd-planner/core'
-import { hiddenBySection, sectionPlane } from './scene/section'
+import { DEFAULT_DEPTH_MM, hiddenBySection, sectionPlane } from './scene/section'
 
 export interface CatalogPart {
   id: string
@@ -327,7 +327,7 @@ export const useStore = create<State>((set, get) => ({
 
   // Opens on Y at 0: the plane of the board's front face, where the wall
   // side and the room part company.
-  section: { on: false, axis: 'y', depth: 0, flipped: false, dragging: false },
+  section: { on: false, axis: 'y', depth: DEFAULT_DEPTH_MM, flipped: false, dragging: false },
   // Toggling off mid-drag would otherwise leave the camera standing down
   // with no handle left to release it.
   toggleSection: () =>

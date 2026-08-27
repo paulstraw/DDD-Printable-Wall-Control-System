@@ -42,6 +42,20 @@ export interface PointerDelta {
  */
 export const NEAR_AXIS_DEGREES = 15
 
+/**
+ * Where a fresh section opens, in mm along the axis.
+ *
+ * Not zero, and not by taste. Zero on Y is the board's front face, and a plane
+ * coincident with a face puts every fragment of that face at clip distance
+ * zero — so float error, not geometry, decides each one. The board comes back
+ * stippled, or hairlined along every seam of however it happens to be
+ * tessellated, and an instrument whose picture depends on that is not an
+ * instrument. A tenth of a millimetre in front of the wall asks a question
+ * with an answer, and is two orders of magnitude below the panel's own
+ * thickness — far below anything this overlay is read for.
+ */
+export const DEFAULT_DEPTH_MM = -0.1
+
 /** Millimetres of depth per pixel of pointer travel. Both drag paths use it. */
 export const DRAG_MM_PER_PX = 0.5
 

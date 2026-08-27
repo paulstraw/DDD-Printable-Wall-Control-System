@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { PerspectiveCamera } from 'three'
-import type { Axis, Bounds } from '@ddd-planner/core'
+import { PANEL_THICKNESS_MM, type Axis, type Bounds } from '@ddd-planner/core'
 import {
+  DEFAULT_DEPTH_MM,
   DRAG_MM_PER_PX,
   FINE_DRAG_SCALE,
   NEAR_AXIS_DEGREES,
@@ -202,5 +203,27 @@ describe('depthFromDrag', () => {
       -100 * DRAG_MM_PER_PX,
       6,
     )
+  })
+})
+
+describe('DEFAULT_DEPTH_MM', () => {
+  // A plane coincident with a face renders that face by float error rather
+  // than by geometry, so the depth a section opens at must not be one.
+  it('does not land on the front face of the board', () => {
+    expect(DEFAULT_DEPTH_MM).not.toBe(0)
+  })
+
+  it('opens in front of the wall, so the whole board is kept', () => {
+    expect(DEFAULT_DEPTH_MM).toBeLessThan(0)
+    const plane = sectionPlane('y', DEFAULT_DEPTH_MM, false)
+    expect(keeps(plane, [0, 0, 0])).toBe(true)
+    expect(keeps(plane, [0, PANEL_THICKNESS_MM, 0])).toBe(true)
+  })
+
+  // Clear of float error by orders of magnitude, and far under the panel it
+  // sits in front of: it must not read as a measurement of anything.
+  it('is a hair, not a distance', () => {
+    expect(Math.abs(DEFAULT_DEPTH_MM)).toBeGreaterThan(1e-3)
+    expect(Math.abs(DEFAULT_DEPTH_MM)).toBeLessThan(PANEL_THICKNESS_MM / 10)
   })
 })
