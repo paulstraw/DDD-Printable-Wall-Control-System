@@ -167,6 +167,9 @@ error.
   they are flagged and the planner will not pretend their position means anything.
 - **Panel tiling.** The wall is one free-size board. Real panels have roughly a 1 inch
   unslotted border, so the planner permits some layouts a tiled wall would not.
+- **The 1/4" mounting holes.** The slots are cut through the board — the panel is drawn as the
+  material around them and nothing stands in for a hole. The 1/4" holes on the interleaved
+  inch grid are not cut, so they are the one place the board still disagrees with a real panel.
 - **Print-plate packing.** The BOM tells you what to print, not how to arrange it.
 - **Filament accuracy.** Grams assume 100% infill, so the number is an honest upper bound. The
   panel says so.

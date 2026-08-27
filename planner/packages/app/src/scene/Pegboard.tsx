@@ -1,16 +1,18 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { Object3D } from 'three'
+import { BoxGeometry, Object3D } from 'three'
 import type { InstancedMesh } from 'three'
-import {
-  PANEL_THICKNESS_MM,
-  SLOT_HEIGHT_MM,
-  SLOT_WIDTH_MM,
-  type Board,
-  slotColumnCount,
-  slotColumnX,
-  slotRowCenterZ,
-  slotRowCount,
-} from '@ddd-planner/core'
+import { PANEL_THICKNESS_MM, type Board, panelSolids } from '@ddd-planner/core'
+
+/**
+ * One rectangle of panel: one instance of this.
+ *
+ * The thickness is baked in here rather than applied as an instance scale,
+ * so every front face is an authored y = 0 and not the difference between
+ * two halves of 1.587. The section overlay's default cut is the y = 0 plane
+ * — the very same plane — and a front face whose clip distance is *nearly*
+ * zero renders as speckle rather than as panel.
+ */
+const UNIT_PANEL = new BoxGeometry(1, PANEL_THICKNESS_MM, 1).translate(0, PANEL_THICKNESS_MM / 2, 0)
 
 /**
  * The virtual pegboard.
@@ -23,50 +25,36 @@ import {
  * Wall space: X across, Y into the wall, Z up. The front face is y = 0, so
  * the board itself occupies y from 0 to its thickness and everything mounted
  * on it sits at negative y.
+ *
+ * The slots are not drawn. *Nothing* is drawn where a slot is: the board is
+ * the material `panelSolids` says is there and no more, one box per
+ * rectangle. A slot is therefore a genuine void — you see the scene through
+ * it, and from behind you see the backs of the parts hanging on it. The 1/4"
+ * mounting holes are not cut; see the planner README.
  */
 export function Pegboard({ board }: { board: Board }) {
-  const slots = useRef<InstancedMesh>(null)
+  const panel = useRef<InstancedMesh>(null)
 
-  const layout = useMemo(() => {
-    const cols = slotColumnCount(board)
-    const rows = slotRowCount(board)
-    const positions: [number, number][] = []
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) positions.push([slotColumnX(c), slotRowCenterZ(r)])
-    }
-    return { cols, rows, positions }
-  }, [board])
+  const solids = useMemo(() => panelSolids(board), [board])
 
   useLayoutEffect(() => {
-    const mesh = slots.current
+    const mesh = panel.current
     if (!mesh) return
     const dummy = new Object3D()
-    layout.positions.forEach(([x, z], i) => {
-      dummy.position.set(x, PANEL_THICKNESS_MM / 2, z)
+    solids.forEach((solid, i) => {
+      dummy.position.set(solid.x, 0, solid.z)
+      dummy.scale.set(solid.widthMm, 1, solid.heightMm)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
     })
     mesh.instanceMatrix.needsUpdate = true
-    mesh.count = layout.positions.length
-  }, [layout])
+    mesh.count = solids.length
+    mesh.computeBoundingSphere()
+  }, [solids])
 
   return (
-    <group>
-      <mesh position={[board.widthMm / 2, PANEL_THICKNESS_MM / 2, board.heightMm / 2]} receiveShadow>
-        <boxGeometry args={[board.widthMm, PANEL_THICKNESS_MM, board.heightMm]} />
-        <meshStandardMaterial color="#c8ccd2" roughness={0.85} metalness={0} />
-      </mesh>
-
-      {/* Slots are drawn slightly proud of both faces so they read as cut
-          through the panel rather than z-fighting with it. */}
-      <instancedMesh
-        key={layout.positions.length}
-        ref={slots}
-        args={[undefined, undefined, Math.max(1, layout.positions.length)]}
-      >
-        <boxGeometry args={[SLOT_WIDTH_MM, PANEL_THICKNESS_MM * 3, SLOT_HEIGHT_MM]} />
-        <meshStandardMaterial color="#2f353d" roughness={0.95} metalness={0} />
-      </instancedMesh>
-    </group>
+    <instancedMesh key={solids.length} ref={panel} args={[UNIT_PANEL, undefined, solids.length]}>
+      <meshStandardMaterial color="#a8aeb7" roughness={0.85} metalness={0} />
+    </instancedMesh>
   )
 }

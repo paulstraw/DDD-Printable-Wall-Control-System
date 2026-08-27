@@ -18,6 +18,7 @@ import {
   isSlotOnBoard,
   mmToInches,
   nearestSlot,
+  panelSolids,
   slotAt,
   slotColumnCount,
   slotColumnX,
@@ -227,5 +228,88 @@ describe('cross-check: the Flats series', () => {
     expect(steps[2]).toBeCloseTo(22.3, 6)
     expect(steps[3]).toBeCloseTo(28.5, 6)
     expect((steps[0] as number) + (steps[1] as number)).toBeCloseTo(SLOT_ROW_PITCH_MM, 6)
+  })
+})
+
+describe('panelSolids', () => {
+  /** Boards chosen for their edges: the minimum, the default, an odd size,
+      one whose right edge lands mid-slot, and one too small for any slot. */
+  const BOARDS = [
+    createBoard(4, 4),
+    createBoard(32, 32),
+    createBoard(13, 7),
+    REFERENCE,
+    { widthMm: 25.4, heightMm: 25.4 },
+    { widthMm: 26.5, heightMm: 38.1 },
+  ]
+
+  const slotRects = (board: ReturnType<typeof createBoard>) =>
+    slots(board).map((s) => ({
+      minX: s.x - SLOT_WIDTH_MM / 2,
+      maxX: s.x + SLOT_WIDTH_MM / 2,
+      minZ: s.z - SLOT_HEIGHT_MM / 2,
+      maxZ: s.z + SLOT_HEIGHT_MM / 2,
+    }))
+
+  const bounds = (p: { x: number; z: number; widthMm: number; heightMm: number }) => ({
+    minX: p.x - p.widthMm / 2,
+    maxX: p.x + p.widthMm / 2,
+    minZ: p.z - p.heightMm / 2,
+    maxZ: p.z + p.heightMm / 2,
+  })
+
+  const overlaps = (
+    a: { minX: number; maxX: number; minZ: number; maxZ: number },
+    b: { minX: number; maxX: number; minZ: number; maxZ: number },
+  ) => a.minX < b.maxX - 1e-9 && b.minX < a.maxX - 1e-9 && a.minZ < b.maxZ - 1e-9 && b.minZ < a.maxZ - 1e-9
+
+  it.each(BOARDS)('stays inside the board ($widthMm × $heightMm)', (board) => {
+    const pieces = panelSolids(board)
+    expect(pieces.length).toBeGreaterThan(0)
+    for (const piece of pieces) {
+      const b = bounds(piece)
+      expect(piece.widthMm).toBeGreaterThan(0)
+      expect(piece.heightMm).toBeGreaterThan(0)
+      expect(b.minX).toBeGreaterThanOrEqual(-1e-9)
+      expect(b.minZ).toBeGreaterThanOrEqual(-1e-9)
+      expect(b.maxX).toBeLessThanOrEqual(board.widthMm + 1e-9)
+      expect(b.maxZ).toBeLessThanOrEqual(board.heightMm + 1e-9)
+    }
+  })
+
+  // Pairwise checks are quadratic, so they run on the smaller boards. The
+  // lattice is uniform: a piece that overlapped anything would overlap here.
+  const SMALL = BOARDS.filter((b) => b.widthMm * b.heightMm <= 406.4 * 812.8)
+
+  it.each(SMALL)('never covers a slot ($widthMm × $heightMm)', (board) => {
+    const pieces = panelSolids(board).map(bounds)
+    for (const slot of slotRects(board)) {
+      for (const piece of pieces) expect(overlaps(piece, slot)).toBe(false)
+    }
+  })
+
+  it.each(SMALL)('lays no piece over another ($widthMm × $heightMm)', (board) => {
+    const pieces = panelSolids(board).map(bounds)
+    for (let i = 0; i < pieces.length; i++) {
+      for (let j = i + 1; j < pieces.length; j++) {
+        expect(overlaps(pieces[i]!, pieces[j]!)).toBe(false)
+      }
+    }
+  })
+
+  // Disjoint, inside, and this much area between them leaves nowhere
+  // uncovered: the pieces are the board less its slots, exactly.
+  it.each(BOARDS)('is the board less every slot ($widthMm × $heightMm)', (board) => {
+    const area = panelSolids(board).reduce((sum, p) => sum + p.widthMm * p.heightMm, 0)
+    const slotArea = slots(board).length * SLOT_WIDTH_MM * SLOT_HEIGHT_MM
+    expect(area).toBeCloseTo(board.widthMm * board.heightMm - slotArea, 6)
+  })
+
+  it('is one unbroken rectangle when no slot fits', () => {
+    const board = { widthMm: 25.4, heightMm: 25.4 }
+    expect(slots(board)).toHaveLength(0)
+    expect(panelSolids(board)).toEqual([
+      { x: 12.7, z: 12.7, widthMm: 25.4, heightMm: 25.4 },
+    ])
   })
 })

@@ -169,6 +169,71 @@ export function holes(board: Board): Hole[] {
   return out
 }
 
+/**
+ * A rectangle of solid panel, given by its centre and its size — the same
+ * way a slot is given by its centre.
+ */
+export interface PanelSolid {
+  readonly x: number
+  readonly z: number
+  readonly widthMm: number
+  readonly heightMm: number
+}
+
+/**
+ * The panel itself: everything that is *not* a slot.
+ *
+ * A slot is an absence, and the material left around the absences is exactly
+ * a set of rectangles, because the slots sit on a lattice. Bands of slots
+ * (one slot tall) alternate with unbroken bands of material; inside a slot
+ * band the material is the width of the board with the slot columns taken
+ * out of it, which is one piece before the first column, one between each
+ * pair, and one after the last.
+ *
+ * That is what lets the board be drawn with real holes in it rather than
+ * with dark objects standing in for them. Nothing here is about rendering:
+ * the rectangles are a fact about the grid, and the tests state them as one
+ * — the pieces are disjoint, none of them overlaps a slot, and their area is
+ * the board's area less every slot's.
+ *
+ * Bottom-up, and never empty: a board too small to hold a single slot is one
+ * unbroken rectangle.
+ */
+export function panelSolids(board: Board): PanelSolid[] {
+  const cols = slotColumnCount(board)
+  const rows = slotRowCount(board)
+
+  // The x ranges of material inside a slot band. Shared by every band,
+  // because every slot band has the same columns punched out of it.
+  const spansX: [number, number][] = []
+  let x = 0
+  for (let col = 0; col < cols; col++) {
+    const centre = slotColumnX(col)
+    spansX.push([x, centre - SLOT_WIDTH_MM / 2])
+    x = centre + SLOT_WIDTH_MM / 2
+  }
+  spansX.push([x, board.widthMm])
+
+  const out: PanelSolid[] = []
+  const add = (x0: number, x1: number, z0: number, z1: number): void => {
+    // A board whose edge lands exactly on a slot edge leaves a piece of no
+    // width. It is not material; it is the absence of a margin.
+    if (x1 - x0 <= EPSILON_MM || z1 - z0 <= EPSILON_MM) return
+    out.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, widthMm: x1 - x0, heightMm: z1 - z0 })
+  }
+
+  let z = 0
+  for (let row = 0; row < rows; row++) {
+    const { minZ, maxZ } = slotRowExtentZ(row)
+    add(0, board.widthMm, z, minZ)
+    for (const [x0, x1] of spansX) add(x0, x1, minZ, maxZ)
+    z = maxZ
+  }
+  add(0, board.widthMm, z, board.heightMm)
+
+  return out
+}
+
 export function isSlotOnBoard(board: Board, col: number, row: number): boolean {
   return (
     Number.isInteger(col) &&
