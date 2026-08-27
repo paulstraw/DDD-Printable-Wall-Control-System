@@ -18,9 +18,19 @@
  */
 
 import type { Assembly, AssemblyPart, PlacedRef } from './assemblies'
+import { DEFAULT_COLORS, type WallColors, isDefaultColors, isHexColor } from './colors'
 import { isFiniteNumber, makeDictionary, readTriple, writeRow } from './rows'
 
-export const DOCUMENT_VERSION = 1
+/**
+ * 2 added colors. A v1 document still decodes — it simply says nothing about
+ * color, and nothing is exactly what the defaults mean.
+ *
+ * The bump costs one thing, knowingly: a build cached before this change
+ * refuses every v2 link, including links to walls nobody recolored. Writing
+ * v1 for an uncolored wall would have avoided that, at the price of a
+ * document whose version depends on its contents.
+ */
+export const DOCUMENT_VERSION = 2
 
 /** The wire form. Keys are short because they repeat. */
 export interface PlannerDocument {
@@ -37,6 +47,17 @@ export interface PlannerDocument {
   readonly p: readonly (readonly number[])[]
   /** Assemblies as `[name, [[dictIndex, dCol, dRow, o?], ...]]`. */
   readonly a: readonly (readonly [string, readonly (readonly number[])[]])[]
+  /**
+   * Color dictionary; painted rows index into it. Absent when nothing on the
+   * wall was painted, which is most walls.
+   */
+  readonly c?: readonly string[]
+  /**
+   * The wall's own colors, `[background, panel, parts]` — positional for the
+   * same reason `w` is. Absent when they are the defaults, so a wall nobody
+   * recolored carries no trace of the feature.
+   */
+  readonly s?: readonly [string, string, string]
 }
 
 export interface PlannerState {
@@ -44,6 +65,11 @@ export interface PlannerState {
   readonly heightIn: number
   readonly placements: readonly PlacedRef[]
   readonly assemblies: readonly Assembly[]
+  /**
+   * Always present, even for a document that never mentioned them — a decoded
+   * wall should not make every reader work out what "unset" looks like.
+   */
+  readonly colors: WallColors
 }
 
 export type DecodeResult =
@@ -56,21 +82,44 @@ export type DecodeResult =
 
 export function toDocument(state: PlannerState): PlannerDocument {
   const { ids: dictionary, intern } = makeDictionary()
+  // A second dictionary, for the same reason as the first: a wall painted in
+  // three colors should pay for three strings, not one per part.
+  const { ids: colors, intern: internColor } = makeDictionary()
+  const paint = (color: string | undefined) => (color === undefined ? null : internColor(color))
 
   const p = state.placements.map((placement) =>
-    writeRow(intern(placement.partId), placement.col, placement.row, placement.orientation),
+    writeRow(
+      intern(placement.partId),
+      placement.col,
+      placement.row,
+      placement.orientation,
+      paint(placement.color),
+    ),
   )
   const a = state.assemblies.map(
     (assembly) =>
       [
         assembly.name,
         assembly.parts.map((part) =>
-          writeRow(intern(part.partId), part.dCol, part.dRow, part.orientation),
+          writeRow(intern(part.partId), part.dCol, part.dRow, part.orientation, paint(part.color)),
         ),
       ] as const,
   )
 
-  return { v: DOCUMENT_VERSION, w: [state.widthIn, state.heightIn], d: dictionary, p, a }
+  // Both color keys are omitted when they have nothing to say, and they come
+  // last, so an uncolored wall serialises to the same keys in the same order
+  // it always did — only the version number moves.
+  return {
+    v: DOCUMENT_VERSION,
+    w: [state.widthIn, state.heightIn],
+    d: dictionary,
+    p,
+    a,
+    ...(colors.length > 0 ? { c: colors } : {}),
+    ...(isDefaultColors(state.colors)
+      ? {}
+      : { s: [state.colors.background, state.colors.panel, state.colors.parts] as const }),
+  }
 }
 
 /**
@@ -124,14 +173,23 @@ export function decodeDocument(text: string): DecodeResult {
   }
   const ids = dictionary as string[]
 
+  // Validated up front rather than row by row, so a document naming a color
+  // that is not one says so once instead of once per part that used it.
+  const colorsRaw = doc.c ?? []
+  if (!Array.isArray(colorsRaw) || !colorsRaw.every(isHexColor)) {
+    return { ok: false, error: 'That wall has a damaged color list.' }
+  }
+  const colors = colorsRaw as string[]
+
+  const wallColors = readWallColors(doc.s)
+  if (wallColors === null) return { ok: false, error: 'That wall has damaged colors.' }
+
   const placementsRaw = doc.p
   if (!Array.isArray(placementsRaw)) return { ok: false, error: 'That wall has no placements.' }
 
   const placements: PlacedRef[] = []
   for (const entry of placementsRaw) {
-    // No color dictionary in this format yet, so a row claiming a color is
-    // pointing at nothing and is refused along with the rest of the damage.
-    const triple = readTriple(entry, ids.length, 0)
+    const triple = readTriple(entry, ids.length, colors.length)
     // One bad row means the file is not what it claims. Silently dropping it
     // would hand back a wall missing parts with no hint why.
     if (!triple) return { ok: false, error: 'That wall has a damaged placement.' }
@@ -140,6 +198,9 @@ export function decodeDocument(text: string): DecodeResult {
       col: triple[1],
       row: triple[2],
       orientation: triple[3],
+      // Spread rather than `color: undefined`, so an unpainted placement has
+      // no key at all and compares equal to one built by hand.
+      ...(triple[4] === null ? {} : { color: colors[triple[4]]! }),
     })
   }
 
@@ -157,13 +218,14 @@ export function decodeDocument(text: string): DecodeResult {
     }
     const parts: AssemblyPart[] = []
     for (const part of partsRaw) {
-      const triple = readTriple(part, ids.length, 0)
+      const triple = readTriple(part, ids.length, colors.length)
       if (!triple) return { ok: false, error: `Assembly “${name}” has a damaged part.` }
       parts.push({
         partId: ids[triple[0]]!,
         dCol: triple[1],
         dRow: triple[2],
         orientation: triple[3],
+        ...(triple[4] === null ? {} : { color: colors[triple[4]]! }),
       })
     }
     assemblies.push({ id: `a${i + 1}`, name, parts })
@@ -171,8 +233,22 @@ export function decodeDocument(text: string): DecodeResult {
 
   return {
     ok: true,
-    state: { widthIn: wall[0], heightIn: wall[1], placements, assemblies },
+    state: { widthIn: wall[0], heightIn: wall[1], placements, assemblies, colors: wallColors },
   }
+}
+
+/**
+ * The three wall colors, or the defaults when the document says nothing.
+ *
+ * `null` is damage, not absence: a document that bothered to write `s` and got
+ * it wrong is a document that has been edited by something that did not
+ * understand it, and the rest of it is no more trustworthy than that field.
+ */
+function readWallColors(value: unknown): WallColors | null {
+  if (value === undefined) return DEFAULT_COLORS
+  if (!Array.isArray(value) || value.length !== 3 || !value.every(isHexColor)) return null
+  const [background, panel, parts] = value as [string, string, string]
+  return { background, panel, parts }
 }
 
 /**

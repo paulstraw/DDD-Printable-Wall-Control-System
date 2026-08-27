@@ -12,6 +12,7 @@ import {
   applySelection,
   clampGroupDelta,
   createAssembly,
+  DEFAULT_COLORS,
   createBoard,
   decodeClipping,
   encodeClipping,
@@ -764,6 +765,9 @@ export const useStore = create<State>((set, get) => ({
         orientation: p.orientation,
       })),
       assemblies,
+      // The store does not own colors yet, so every wall it snapshots is at
+      // the defaults — which is exactly what the planner draws today.
+      colors: DEFAULT_COLORS,
     }
   },
 

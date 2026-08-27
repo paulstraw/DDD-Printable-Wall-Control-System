@@ -30,6 +30,17 @@ export interface AssemblyPart {
    * that was saved.
    */
   readonly orientation: Orientation
+  /**
+   * What this part was painted, if anything.
+   *
+   * Present for the clipboard, which shares this shape and is a *duplicate* of
+   * a bay — paste it and you expect what you copied, colors included. A saved
+   * assembly is the other thing: a reusable shape that should take on whatever
+   * wall it lands on, so saving one drops this. The stripping happens at save
+   * time rather than in the codec, because the two want the same encoding and
+   * differ only in intent.
+   */
+  readonly color?: string
 }
 
 export interface Assembly {
@@ -43,6 +54,13 @@ export interface PlacedRef {
   readonly col: number
   readonly row: number
   readonly orientation: Orientation
+  /**
+   * What this part is painted, if the person building the wall said so.
+   *
+   * Absent is the common case and does not mean grey — it means whatever the
+   * wall's default is, and it repaints when that default changes.
+   */
+  readonly color?: string
 }
 
 /**

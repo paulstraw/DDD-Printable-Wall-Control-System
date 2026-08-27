@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_COLORS } from '../src/colors'
 import {
   DOCUMENT_VERSION,
   type PlannerState,
@@ -27,6 +28,7 @@ const wall: PlannerState = {
       ],
     },
   ],
+  colors: DEFAULT_COLORS,
 }
 
 describe('toDocument', () => {
@@ -60,6 +62,7 @@ describe('toDocument', () => {
       heightIn: 32,
       placements: Array.from({ length: 50 }, (_, i) => ({ partId: long, col: i, row: 2, orientation: 'flat' as const })),
       assemblies: [],
+      colors: DEFAULT_COLORS,
     }
     const encoded = encodeDocument(many)
     // The id must appear once, not fifty times.
@@ -81,7 +84,13 @@ describe('round trip', () => {
   })
 
   it('survives an empty wall', () => {
-    const empty: PlannerState = { widthIn: 32, heightIn: 32, placements: [], assemblies: [] }
+    const empty: PlannerState = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [],
+      assemblies: [],
+      colors: DEFAULT_COLORS,
+    }
     const back = decodeDocument(encodeDocument(empty))
     expect(back.ok).toBe(true)
     if (back.ok) expect(back.state).toEqual(empty)
@@ -186,8 +195,12 @@ describe('decodeDocument refuses bad input rather than guessing', () => {
         { partId: 'b', col: 2, row: 1, orientation: 'flat' as const },
       ],
       assemblies: [],
+      colors: DEFAULT_COLORS,
     }
-    expect(encodeDocument(state)).toBe('{"v":1,"w":[32,32],"d":["a","b"],"p":[[0,1,1],[1,2,1]],"a":[]}')
+    // Every key and every row is what it was; only the version moved. Colors
+    // cost an uncolored wall two characters, and those two are the whole
+    // price of the feature for anyone who never uses it.
+    expect(encodeDocument(state)).toBe('{"v":2,"w":[32,32],"d":["a","b"],"p":[[0,1,1],[1,2,1]],"a":[]}')
   })
 
   it('round-trips a shelf through encode and decode', () => {
@@ -198,6 +211,7 @@ describe('decodeDocument refuses bad input rather than guessing', () => {
       assemblies: [
         { id: 'a1', name: 'Shelf', parts: [{ partId: 'a', dCol: 0, dRow: 0, orientation: 'shelf' as const }] },
       ],
+      colors: DEFAULT_COLORS,
     }
     const result = decodeDocument(encodeDocument(state))
     expect(result.ok).toBe(true)
@@ -245,8 +259,133 @@ describe('unknownPartIds', () => {
       heightIn: 32,
       placements: [],
       assemblies: [{ id: 'a1', name: 'x', parts: [{ partId: 'ghost', dCol: 0, dRow: 0, orientation: 'flat' as const }] }],
+      colors: DEFAULT_COLORS,
     }
     expect(unknownPartIds(state, known)).toEqual(['ghost'])
   })
 })
 
+
+describe('colors in the document', () => {
+  /** A v1 wall: written before colors existed, and saying nothing about them. */
+  const v1 = '{"v":1,"w":[32,32],"d":["a"],"p":[[0,1,1]],"a":[]}'
+
+  it('decodes a wall written before colors existed', () => {
+    const back = decodeDocument(v1)
+    expect(back.ok).toBe(true)
+    if (!back.ok) return
+    expect(back.state.placements).toEqual([{ partId: 'a', col: 1, row: 1, orientation: 'flat' }])
+    // Saying nothing is not the same as saying grey — but it decodes to the
+    // grey the planner always drew, so an old link opens looking as it did.
+    expect(back.state.colors).toEqual(DEFAULT_COLORS)
+  })
+
+  it('leaves an unpainted placement with no color key at all', () => {
+    const back = decodeDocument(v1)
+    if (!back.ok) throw new Error(back.error)
+    expect('color' in back.state.placements[0]!).toBe(false)
+  })
+
+  it('says nothing about colors when there is nothing to say', () => {
+    const plain: PlannerState = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [{ partId: 'a', col: 1, row: 1, orientation: 'flat' }],
+      assemblies: [],
+      colors: DEFAULT_COLORS,
+    }
+    const doc = toDocument(plain)
+    expect(doc.c).toBeUndefined()
+    expect(doc.s).toBeUndefined()
+  })
+
+  it('round-trips painted parts and a recolored wall', () => {
+    const painted: PlannerState = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [
+        { partId: 'a', col: 1, row: 1, orientation: 'flat', color: '#ff0000' },
+        { partId: 'a', col: 2, row: 1, orientation: 'shelf', color: '#ff0000' },
+        { partId: 'b', col: 3, row: 1, orientation: 'flat' },
+      ],
+      assemblies: [],
+      colors: { background: '#101014', panel: '#000000', parts: '#cccccc' },
+    }
+    const back = decodeDocument(encodeDocument(painted))
+    expect(back.ok).toBe(true)
+    if (!back.ok) return
+    expect(back.state.placements).toEqual(painted.placements)
+    expect(back.state.colors).toEqual(painted.colors)
+  })
+
+  it('interns each color once however many parts wear it', () => {
+    const red = '#ff0000'
+    const many: PlannerState = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: Array.from({ length: 20 }, (_, i) => ({
+        partId: 'a',
+        col: i,
+        row: 1,
+        orientation: 'flat' as const,
+        color: red,
+      })),
+      assemblies: [],
+      colors: DEFAULT_COLORS,
+    }
+    const encoded = encodeDocument(many)
+    expect(encoded.split(red).length - 1).toBe(1)
+  })
+
+  it('keeps a color on a part inside an assembly', () => {
+    const state: PlannerState = {
+      widthIn: 32,
+      heightIn: 32,
+      placements: [],
+      assemblies: [
+        {
+          id: 'a1',
+          name: 'Bay',
+          parts: [{ partId: 'a', dCol: 0, dRow: 0, orientation: 'flat', color: '#00ff00' }],
+        },
+      ],
+      colors: DEFAULT_COLORS,
+    }
+    const back = decodeDocument(encodeDocument(state))
+    if (!back.ok) throw new Error(back.error)
+    expect(back.state.assemblies[0]?.parts).toEqual(state.assemblies[0]?.parts)
+  })
+})
+
+describe('a document whose colors are damaged', () => {
+  const refuses = (doc: string) => {
+    const back = decodeDocument(doc)
+    expect(back.ok).toBe(false)
+    return back.ok ? '' : back.error
+  }
+
+  it('refuses a color list holding something that is not a color', () => {
+    expect(refuses('{"v":2,"w":[32,32],"d":["a"],"p":[],"a":[],"c":["red"]}')).toMatch(/color list/)
+    expect(refuses('{"v":2,"w":[32,32],"d":["a"],"p":[],"a":[],"c":["#f00"]}')).toMatch(/color list/)
+    expect(refuses('{"v":2,"w":[32,32],"d":["a"],"p":[],"a":[],"c":[16711680]}')).toMatch(/color list/)
+  })
+
+  it('refuses wall colors that are the wrong shape or not colors', () => {
+    expect(refuses('{"v":2,"w":[32,32],"d":[],"p":[],"a":[],"s":["#fff","#000000","#111111"]}')).toMatch(/damaged colors/)
+    expect(refuses('{"v":2,"w":[32,32],"d":[],"p":[],"a":[],"s":["#000000","#111111"]}')).toMatch(/damaged colors/)
+    expect(refuses('{"v":2,"w":[32,32],"d":[],"p":[],"a":[],"s":"#000000"}')).toMatch(/damaged colors/)
+  })
+
+  it('refuses a placement pointing at a color the document did not bring', () => {
+    expect(
+      refuses('{"v":2,"w":[32,32],"d":["a"],"p":[[0,1,1,0,0]],"a":[]}'),
+    ).toMatch(/damaged placement/)
+    expect(
+      refuses('{"v":2,"w":[32,32],"d":["a"],"p":[[0,1,1,0,1]],"a":[],"c":["#ff0000"]}'),
+    ).toMatch(/damaged placement/)
+  })
+
+  it('refuses a document from a version it does not know', () => {
+    expect(refuses('{"v":3,"w":[32,32],"d":[],"p":[],"a":[]}')).toMatch(/newer version/)
+  })
+})

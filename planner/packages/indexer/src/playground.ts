@@ -21,7 +21,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { type Orientation, type PlacedRef, encodeDocument } from '@ddd-planner/core'
+import { DEFAULT_COLORS, type Orientation, type PlacedRef, encodeDocument } from '@ddd-planner/core'
 import { PLANNER_ROOT } from './assembly'
 
 const INDEX = join(PLANNER_ROOT, 'packages', 'app', 'public', 'parts', 'index.json')
@@ -152,6 +152,8 @@ const state = {
   heightIn: (BAND.flatBare + 1) * 2 + 2,
   placements,
   assemblies: [],
+  // An audit wall is for measuring parts, not looking at.
+  colors: DEFAULT_COLORS,
 }
 
 writeFileSync(OUT, encodeDocument(state, { pretty: true }))

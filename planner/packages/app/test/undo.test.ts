@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { PlannerState } from '@ddd-planner/core'
+import { DEFAULT_COLORS, type PlannerState } from '@ddd-planner/core'
 import { EMPTY_HISTORY } from '../src/history'
 import { type CatalogFile, useStore } from '../src/store'
 
@@ -48,6 +48,7 @@ const walled = (widthIn: number, heightIn: number): PlannerState => ({
   heightIn,
   placements: [{ partId: 'part-a', col: 1, row: 1, orientation: 'flat' }],
   assemblies: [],
+  colors: DEFAULT_COLORS,
 })
 
 describe('what makes an entry', () => {
