@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@base-ui/react": "^1.7.0",
     "@ddd-planner/core": "*",
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
