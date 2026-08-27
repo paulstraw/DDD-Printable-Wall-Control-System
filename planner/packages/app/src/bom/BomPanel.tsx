@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react'
-import { bomToCsv, bomToMarkdown, buildBom, estimateDownload, formatBytes } from '@ddd-planner/core'
+import {
+  bomToCsv,
+  bomToMarkdown,
+  buildBom,
+  estimateDownload,
+  formatBytes,
+  labelForColor,
+} from '@ddd-planner/core'
 import { useStore } from '../store'
 import { type DownloadFile, useDownload } from './useDownload'
 
@@ -52,6 +59,9 @@ function downloadLabel(status: ReturnType<typeof useDownload>['status'], estimat
 export function BomPanel() {
   const catalog = useStore((s) => s.catalog)
   const placements = useStore((s) => s.placements)
+  // The same default the scene draws with, so the list cannot disagree with
+  // the wall about what an unpainted part is.
+  const defaultPartColor = useStore((s) => s.colors.parts)
   const { status, download } = useDownload()
 
   const bom = useMemo(
@@ -60,8 +70,9 @@ export function BomPanel() {
         placements,
         parts: catalog?.parts ?? [],
         fasteners: catalog?.fasteners ?? {},
+        defaultPartColor,
       }),
-    [placements, catalog],
+    [placements, catalog, defaultPartColor],
   )
 
   const lines = [...bom.parts, ...bom.fasteners]
@@ -108,21 +119,52 @@ export function BomPanel() {
         <>
           <ul className="bom-lines">
             {lines.map((line) => (
-              <li key={`${line.kind}-${line.id}`} className={`bom-line ${line.kind}`}>
+              <li
+                key={`${line.kind}-${line.id}-${line.color}`}
+                className={`bom-line ${line.kind}`}
+              >
                 <span className="qty">{line.quantity}×</span>
                 <span className="name">
                   {line.name}
                   {line.kind === 'fastener' ? <span className="tag">fastener</span> : null}
                 </span>
+                {/*
+                  The swatch carries its name as a title rather than as text:
+                  a print list is scanned down the quantities and the grams,
+                  and a word per row would push those apart. The copied text
+                  spells it out, which is where the name is actually needed.
+                */}
+                <span
+                  className="bom-swatch"
+                  style={{ background: line.color }}
+                  title={labelForColor(line.color)}
+                />
                 <span className="grams">{round1(line.totalGrams)} g</span>
               </li>
             ))}
             <li className="bom-line total">
               <span className="qty">{bom.totalPieces}</span>
               <span className="name">total</span>
+              <span className="bom-swatch is-blank" />
               <span className="grams">{round1(bom.totalGrams)} g</span>
             </li>
           </ul>
+
+          {/*
+            Only when there is more than one — a per-color breakdown of a wall
+            printed in one color is the total, said twice.
+          */}
+          {bom.colorTotals.length > 1 ? (
+            <ul className="bom-colors">
+              {bom.colorTotals.map((total) => (
+                <li key={total.color}>
+                  <span className="bom-swatch" style={{ background: total.color }} />
+                  <span className="name">{labelForColor(total.color)}</span>
+                  <span className="grams">{round1(total.grams)} g</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <div className="bom-foot">
             {confirmLarge ? (

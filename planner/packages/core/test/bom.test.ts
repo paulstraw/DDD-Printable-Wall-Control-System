@@ -10,6 +10,9 @@ import {
   filamentGrams,
 } from '../src/bom'
 
+/** The wall default every unpainted placement inherits, unless a test says otherwise. */
+const GREY = '#b9bfc7'
+
 const FLAT_LEFT: BomPart = {
   id: 'flat-left',
   name: '3x0 Flat Left',
@@ -75,6 +78,7 @@ describe('buildBom', () => {
       placements: place('locking', 2),
       parts: [LOCKING],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(flat.fasteners.find((f) => f.id === '8mm Lock Pin')?.quantity).toBe(2)
 
@@ -82,6 +86,7 @@ describe('buildBom', () => {
       placements: place('locking', 2, 'shelf'),
       parts: [LOCKING],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(shelf.fasteners).toEqual([])
     // The part itself is still printed, and still twice.
@@ -93,6 +98,7 @@ describe('buildBom', () => {
       placements: [...place('locking', 3), ...place('locking', 2, 'shelf')],
       parts: [LOCKING],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.parts[0]?.quantity).toBe(5)
     expect(bom.fasteners.find((f) => f.id === '8mm Lock Pin')?.quantity).toBe(3)
@@ -103,6 +109,7 @@ describe('buildBom', () => {
       placements: place('flat-left', 3),
       parts: [FLAT_LEFT],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.parts).toHaveLength(1)
     expect(bom.parts[0]?.quantity).toBe(3)
@@ -114,6 +121,7 @@ describe('buildBom', () => {
       placements: place('clip-on', 5),
       parts: [CLIP_ON],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     // Four pins each, five spacers.
     expect(bom.fasteners).toHaveLength(1)
@@ -126,6 +134,7 @@ describe('buildBom', () => {
       placements: place('flat-left', 2),
       parts: [FLAT_LEFT],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.fasteners).toEqual([])
   })
@@ -135,6 +144,7 @@ describe('buildBom', () => {
       placements: [...place('flat-left', 2), ...place('clip-on', 1)],
       parts: [FLAT_LEFT, CLIP_ON],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     const expected =
       filamentGrams(12_000) * 2 + filamentGrams(30_000) * 1 + filamentGrams(240) * 4
@@ -149,6 +159,7 @@ describe('buildBom', () => {
       placements: [...place('flat-left', 20), ...place('clip-on', 20)],
       parts: [FLAT_LEFT, CLIP_ON],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.files).toHaveLength(3)
     expect(bom.totalPieces).toBe(120)
@@ -159,12 +170,13 @@ describe('buildBom', () => {
       placements: [...place('clip-on', 1), ...place('flat-left', 1)],
       parts: [CLIP_ON, FLAT_LEFT],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.parts.map((p) => p.name)).toEqual(['3x0 Flat Left', '3x3 Spacer clip-on'])
   })
 
   it('is empty for an empty wall', () => {
-    const bom = buildBom({ placements: [], parts: [FLAT_LEFT], fasteners: FASTENERS })
+    const bom = buildBom({ placements: [], parts: [FLAT_LEFT], fasteners: FASTENERS, defaultPartColor: GREY })
     expect(bom.totalPieces).toBe(0)
     expect(bom.totalGrams).toBe(0)
     expect(bom.files).toEqual([])
@@ -175,6 +187,7 @@ describe('buildBom', () => {
       placements: [{ partId: 'gone', orientation: 'flat' as const }, ...place('flat-left', 1)],
       parts: [FLAT_LEFT],
       fasteners: FASTENERS,
+      defaultPartColor: GREY,
     })
     expect(bom.parts).toHaveLength(1)
     expect(bom.totalPieces).toBe(1)
@@ -183,7 +196,7 @@ describe('buildBom', () => {
   it('still counts a fastener the catalog has no entry for', () => {
     // Better to tell someone they need a pin with no weight estimate than to
     // leave it off the list entirely.
-    const bom = buildBom({ placements: place('clip-on', 1), parts: [CLIP_ON], fasteners: {} })
+    const bom = buildBom({ placements: place('clip-on', 1), parts: [CLIP_ON], fasteners: {}, defaultPartColor: GREY })
     expect(bom.fasteners[0]?.quantity).toBe(4)
     expect(bom.fasteners[0]?.totalGrams).toBe(0)
   })
@@ -194,11 +207,12 @@ describe('serialisation', () => {
     placements: [...place('flat-left', 2), ...place('clip-on', 1)],
     parts: [FLAT_LEFT, CLIP_ON],
     fasteners: FASTENERS,
+    defaultPartColor: GREY,
   })
 
   it('writes a Markdown table with a total row', () => {
     const md = bomToMarkdown(bom)
-    expect(md).toContain('| Qty | Part | Kind | Filament |')
+    expect(md).toContain('| Qty | Part | Kind | Color | Filament |')
     expect(md).toContain('3x0 Flat Left')
     expect(md).toContain('4x10x8mm Pin')
     expect(md).toContain('**total**')
@@ -206,13 +220,13 @@ describe('serialisation', () => {
   })
 
   it('says so plainly when nothing is placed', () => {
-    const empty = buildBom({ placements: [], parts: [], fasteners: {} })
+    const empty = buildBom({ placements: [], parts: [], fasteners: {}, defaultPartColor: GREY })
     expect(bomToMarkdown(empty)).toContain('Nothing placed yet')
   })
 
   it('writes CSV with a header and one row per line', () => {
     const csv = bomToCsv(bom).trim().split('\n')
-    expect(csv[0]).toBe('quantity,name,kind,file,unit_grams,total_grams')
+    expect(csv[0]).toBe('quantity,name,kind,color,color_hex,file,unit_grams,total_grams')
     expect(csv).toHaveLength(1 + bom.parts.length + bom.fasteners.length)
   })
 
@@ -225,10 +239,111 @@ describe('serialisation', () => {
       fasteners: [],
     }
     const csv = bomToCsv(
-      buildBom({ placements: place('odd', 1), parts: [awkward], fasteners: {} }),
+      buildBom({ placements: place('odd', 1), parts: [awkward], fasteners: {}, defaultPartColor: GREY }),
     )
     expect(csv).toContain('"Wrench 86-05-[150,180,250] ""wide"""')
     // One header line plus one row — the comma did not split the row.
     expect(csv.trim().split('\n')).toHaveLength(2)
+  })
+})
+
+describe('a print list split by color', () => {
+  const RED = '#c0392b'
+  const painted = (partId: string, colors: readonly (string | undefined)[]) =>
+    colors.map((color) => ({
+      partId,
+      orientation: 'flat' as Orientation,
+      ...(color === undefined ? {} : { color }),
+    }))
+
+  it('is one line per part per color, because that is one print job', () => {
+    const bom = buildBom({
+      placements: painted('flat-left', [RED, RED, undefined, undefined, undefined, undefined]),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    // Grouped by name, then ordered by color, so the two lines for one part
+    // sit together.
+    expect(bom.parts.map((l) => [l.name, l.color, l.quantity])).toEqual([
+      ['3x0 Flat Left', GREY, 4],
+      ['3x0 Flat Left', RED, 2],
+    ])
+  })
+
+  it('stays one line when everything agrees', () => {
+    const bom = buildBom({
+      placements: painted('flat-left', [undefined, undefined]),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    expect(bom.parts).toHaveLength(1)
+    expect(bom.parts[0]?.color).toBe(GREY)
+  })
+
+  it('follows the wall default, so changing it re-bills the unpainted', () => {
+    const bom = buildBom({
+      placements: painted('flat-left', [undefined]),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: '#000000',
+    })
+    expect(bom.parts[0]?.color).toBe('#000000')
+  })
+
+  it('bills a fastener in the color of the part that called for it', () => {
+    // Which is how you would print it: the spacer and its pins come off the
+    // bed in one filament.
+    const bom = buildBom({
+      placements: painted('clip-on', [RED, undefined]),
+      parts: [CLIP_ON],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    const pins = bom.fasteners.filter((l) => l.id === '4x10x8mm Pin')
+    expect(pins.map((l) => [l.color, l.quantity])).toEqual([
+      [GREY, 4],
+      [RED, 4],
+    ])
+  })
+
+  it('totals filament per color, heaviest first', () => {
+    const bom = buildBom({
+      placements: painted('flat-left', [RED, undefined, undefined, undefined]),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    const totals = bom.colorTotals
+    expect(totals.map((t) => t.color)).toEqual([GREY, RED])
+    expect(totals[0]!.grams).toBeGreaterThan(totals[1]!.grams)
+    // Every gram is accounted for exactly once.
+    expect(totals.reduce((sum, t) => sum + t.grams, 0)).toBeCloseTo(bom.totalGrams, 6)
+    expect(totals.reduce((sum, t) => sum + t.pieces, 0)).toBe(bom.totalPieces)
+  })
+
+  it('still fetches one STL per file however many colors it is printed in', () => {
+    // Color splits a print job, not a file. The ZIP is untouched by any of this.
+    const bom = buildBom({
+      placements: painted('flat-left', [RED, undefined]),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    expect(bom.parts).toHaveLength(2)
+    expect(bom.files.filter((f) => f === FLAT_LEFT.file)).toHaveLength(1)
+  })
+
+  it('names a preset and spells out anything else', () => {
+    const bom = buildBom({
+      placements: painted('flat-left', ['#7a4b2b', '#1a1a1a']),
+      parts: [FLAT_LEFT],
+      fasteners: FASTENERS,
+      defaultPartColor: GREY,
+    })
+    const md = bomToMarkdown(bom)
+    expect(md).toContain('Black')
+    expect(md).toContain('#7a4b2b')
   })
 })

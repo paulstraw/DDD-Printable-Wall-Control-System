@@ -1356,3 +1356,50 @@ canvas {
   margin-left: 0.45rem;
   vertical-align: middle;
 }
+
+/*
+ * The color a line is printed in, as a chip rather than a word: a print list
+ * is scanned down its quantities and grams, and a word per row would push
+ * those two apart. The name is a tooltip, and the copied text spells it out.
+ */
+.bom-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+/* Holds the column open on the total row, which has no one color. */
+.bom-swatch.is-blank {
+  border-color: transparent;
+  background: none;
+}
+
+/*
+ * Filament per color. Only shown when there is more than one, because for a
+ * wall printed in a single color it is the total written out twice.
+ */
+.bom-colors {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.7rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.bom-colors li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0.1rem 0;
+}
+
+.bom-colors .name {
+  flex: 1;
+}
+
+.bom-colors .grams {
+  font-variant-numeric: tabular-nums;
+}
