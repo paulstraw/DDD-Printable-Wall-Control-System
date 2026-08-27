@@ -1,11 +1,108 @@
 import { Suspense, useMemo } from 'react'
-import { useGLTF } from '@react-three/drei'
+import { Outlines, useGLTF } from '@react-three/drei'
 import { MeshoptDecoder } from 'meshoptimizer'
+import { Quaternion, Vector3 } from 'three'
+import type { BufferGeometry, Mesh, Object3D } from 'three'
 import type { GLTFLoader } from 'three-stdlib'
 import { type Orientation, type OrientedPlacement, placementOrigin } from '@ddd-planner/core'
 import { PARTS_BASE } from '../catalog/useCatalog'
 import { type CatalogPart, orientedFor } from '../store'
 import { modifierHeld } from '../useModifier'
+
+/**
+ * The selection outline: a thick dark ring with a thinner accent one drawn
+ * over its inner edge.
+ *
+ * Two tones because one is never enough. A single dark ring vanishes against
+ * a dark background; a single orange one vanishes against an orange part.
+ * With both, whichever the wall is wearing, one of the two still reads — and
+ * orange stays the app's single word for "active", the same word the drag
+ * ghost, the marquee and the section handle already use.
+ *
+ * `thickness` is in pixels here: with `screenspace` left off, drei's shader
+ * offsets the silhouette in clip space divided by the viewport, so the ring
+ * is the same width however far away the part is. A selection marker that
+ * grew as you zoomed in would be a decoration; this is a readout.
+ *
+ * The dark one is drawn first so that where they overlap the accent wins —
+ * both shells sit at the same depth, and at equal depth the later draw takes
+ * it. That leaves the dark showing only in the outer band the accent does not
+ * reach, which is the whole trick.
+ */
+const OUTLINE = {
+  dark: { color: '#151920', thickness: 5, renderOrder: 1 },
+  accent: { color: '#f0a35e', thickness: 2, renderOrder: 2 },
+} as const
+
+interface Asset {
+  readonly geometry: BufferGeometry
+  readonly position: [number, number, number]
+  readonly quaternion: [number, number, number, number]
+  readonly scale: [number, number, number]
+}
+
+/**
+ * The one mesh in a part asset, and the transform that puts it where it
+ * belongs.
+ *
+ * The indexer writes exactly one node holding one mesh with one primitive
+ * (`indexer/src/gltf.ts`), so there is nothing to choose between — but this
+ * asks rather than assuming, because a silently wrong part is a blank space
+ * on the wall.
+ *
+ * **The transform is not optional.** The assets are quantized, and
+ * quantization is not a change to the numbers alone: it rescales the
+ * positions into integers and leaves a node transform behind to undo it. Take
+ * the geometry without that transform and every part on the wall collapses
+ * into a speck at the origin — which is exactly what happened when this first
+ * stopped cloning the asset's node and started reading its geometry.
+ */
+function readAsset(scene: Object3D): Asset | null {
+  let mesh: Mesh | null = null
+  scene.traverse((node) => {
+    if (mesh === null && (node as Mesh).isMesh) mesh = node as Mesh
+  })
+  if (mesh === null) return null
+  const found: Mesh = mesh
+
+  // Composed from the root rather than read off the node, so a loader that
+  // wraps the scene in another transform cannot silently move every part.
+  scene.updateWorldMatrix(false, true)
+  const position = new Vector3()
+  const quaternion = new Quaternion()
+  const scale = new Vector3()
+  found.matrixWorld.decompose(position, quaternion, scale)
+
+  return {
+    geometry: withNormals(found.geometry),
+    position: position.toArray(),
+    quaternion: quaternion.toArray() as [number, number, number, number],
+    scale: scale.toArray(),
+  }
+}
+
+/**
+ * Give a part's geometry normals, once.
+ *
+ * The assets deliberately ship without them — see `indexer/src/gltf.ts`, where
+ * dropping the attribute makes the files 3.5× smaller and costs nothing
+ * visually, because the material flat-shades and derives its own. The outline
+ * shader is the one thing that cannot: it pushes each vertex along its normal
+ * to make the silhouette, and with no normals it pushes nothing at all.
+ *
+ * Computing them on the welded, indexed geometry averages across shared
+ * vertices, which is a smooth shell and exactly what an outline wants — the
+ * same thing drei's own default `angle` produces, minus the de-indexing.
+ * Doing it in place is what makes it cheap: `useGLTF` caches by URL, so this
+ * geometry is shared by every placement of that part and the work happens
+ * once per part *type*, not once per part and certainly not once per click.
+ * On a 188k-triangle spacer that is the difference between a selection that
+ * lands and one that hitches.
+ */
+function withNormals(geometry: BufferGeometry): BufferGeometry {
+  if (geometry.attributes.normal === undefined) geometry.computeVertexNormals()
+  return geometry
+}
 
 /**
  * Assets are meshopt-compressed. The decoder is bundled rather than fetched,
@@ -15,39 +112,47 @@ function extendLoader(loader: GLTFLoader) {
   loader.setMeshoptDecoder(MeshoptDecoder)
 }
 
-function Model({ part, selected }: { part: CatalogPart; selected: boolean }) {
+/**
+ * Selection no longer repaints the part, and that is the point.
+ *
+ * It used to paint the whole model orange, which broke twice over once parts
+ * carry colors of their own: you could not see the color you had just applied
+ * while the parts were still selected, and a part actually printed in orange
+ * looked permanently selected. An outline says the same thing without
+ * spending the part's own surface to say it.
+ */
+function Model({ part, color, selected }: { part: CatalogPart; color: string; selected: boolean }) {
   const { scene } = useGLTF(`${PARTS_BASE}${part.model}`, undefined, undefined, extendLoader)
 
-  // Each placement needs its own object, and cloning is what lets the same
-  // part appear on the wall more than once.
-  const object = useMemo(() => {
-    const copy = scene.clone(true)
-    copy.traverse((node) => {
-      const mesh = node as { isMesh?: boolean; material?: unknown }
-      if (!mesh.isMesh) return
-      const material = (mesh.material as { clone: () => unknown }).clone() as {
-        color?: { set: (c: string) => void }
-        emissive?: { set: (c: string) => void }
-        flatShading?: boolean
-        needsUpdate?: boolean
-      }
-      // The assets carry no normals — see indexer/src/gltf.ts. Flat shading
-      // derives them per face in the shader, which is the look these parts
-      // want anyway, and is why dropping the attribute costs nothing.
-      material.flatShading = true
-      material.needsUpdate = true
-      if (selected) {
-        material.color?.set('#f0a35e')
-        material.emissive?.set('#2a1400')
-      } else {
-        material.color?.set('#b9bfc7')
-      }
-      ;(mesh as { material: unknown }).material = material
-    })
-    return copy
-  }, [scene, selected])
+  // The geometry is shared across every placement of this part rather than
+  // cloned per placement, which is both cheaper and what lets the normals
+  // above be computed once. Only the material is per-placement, because only
+  // the color differs.
+  const asset = useMemo(() => readAsset(scene), [scene])
+  if (asset === null) return null
 
-  return <primitive object={object} />
+  return (
+    <mesh
+      geometry={asset.geometry}
+      position={asset.position}
+      quaternion={asset.quaternion}
+      scale={asset.scale}
+    >
+      {/*
+        Flat shading derives face normals in the shader and ignores the vertex
+        normals added above, so the part looks exactly as it always has.
+        `roughness` and `metalness` match what the indexer writes into the
+        asset's own material, which this replaces.
+      */}
+      <meshStandardMaterial color={color} flatShading roughness={0.85} metalness={0} />
+      {selected ? (
+        <>
+          <Outlines angle={0} {...OUTLINE.dark} />
+          <Outlines angle={0} {...OUTLINE.accent} />
+        </>
+      ) : null}
+    </mesh>
+  )
 }
 
 /**
@@ -105,6 +210,7 @@ export function PartModel({
   col,
   row,
   orientation,
+  color,
   selected,
   pickable = true,
   onSelect,
@@ -113,6 +219,8 @@ export function PartModel({
   col: number
   row: number
   orientation: Orientation
+  /** Already resolved against the wall default — see `resolveColor` in core. */
+  color: string
   selected: boolean
   /**
    * False once the section has cut this part away entirely.
@@ -147,7 +255,7 @@ export function PartModel({
     >
       <Suspense fallback={null}>
         <group rotation={[rotationX, 0, 0]} position={offset}>
-          <Model part={part} selected={selected} />
+          <Model part={part} color={color} selected={selected} />
         </group>
       </Suspense>
     </group>

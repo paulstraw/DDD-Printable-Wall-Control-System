@@ -1,4 +1,4 @@
-import { placementOrigin } from '@ddd-planner/core'
+import { placementOrigin, resolveColor } from '@ddd-planner/core'
 import { orientedFor, partById, useStore } from '../store'
 import { PartModel } from './PartModel'
 import { hiddenBySection, sectionPlane } from './section'
@@ -8,6 +8,9 @@ export function PlacedParts() {
   const placements = useStore((s) => s.placements)
   const selectedIds = useStore((s) => s.selectedIds)
   const select = useStore((s) => s.select)
+  // The wall's default, which every unpainted part inherits. Read once here
+  // rather than in each part, so changing it repaints the wall in one pass.
+  const defaultColor = useStore((s) => s.colors.parts)
   const section = useStore((s) => s.section)
 
   /**
@@ -32,6 +35,10 @@ export function PlacedParts() {
             col={placement.col}
             row={placement.row}
             orientation={placement.orientation}
+            // Resolved here and nowhere else: `resolveColor` is the single
+            // place that decides what an unpainted part is, and the BOM asks
+            // it the same question.
+            color={resolveColor(placement, defaultColor)}
             selected={selectedIds.includes(placement.id)}
             pickable={plane === null || !hiddenBySection(drawnBox(part, placement), plane)}
             onSelect={(additive) =>
