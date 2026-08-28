@@ -147,6 +147,20 @@ interface State {
   setWallSize: (size: { widthIn: number; heightIn: number }) => void
 
   /**
+   * Whether the board is the size it is because of the restore on arrival.
+   *
+   * True for exactly one thing, and it exists for exactly one reader: the
+   * camera. Every other way the board changes size — typing one, importing a
+   * wall, stepping through history — is something somebody asked for a
+   * moment ago, and re-framing the view to suit is the answer. The restore
+   * is the one nobody asked for, and it lands late, because it waits for the
+   * catalog so it can name the parts it had to drop. By then the page has
+   * been usable for a second or two and the reader may already be looking
+   * somewhere of their own choosing. See `useFaceOn`.
+   */
+  sizeFromRestore: boolean
+
+  /**
    * The three colors that belong to the wall rather than to any part: what
    * is behind it, what the panel is finished in, and what a part is printed
    * in unless it says otherwise.
@@ -495,8 +509,9 @@ export const useStore = create<State>((set, get) => ({
   board: createBoard(32, 32),
   widthIn: 32,
   heightIn: 32,
+  sizeFromRestore: false,
   setWallSize: ({ widthIn, heightIn }) =>
-    set({ widthIn, heightIn, board: createBoard(widthIn, heightIn) }),
+    set({ widthIn, heightIn, board: createBoard(widthIn, heightIn), sizeFromRestore: false }),
 
   colors: DEFAULT_COLORS,
   setWallColor: (which, color) => set((s) => ({ colors: { ...s.colors, [which]: color } })),
@@ -868,6 +883,7 @@ export const useStore = create<State>((set, get) => ({
       marquee: null,
       dragging: null,
       hoverSlot: null,
+      sizeFromRestore: options?.beginning === true,
     }
     if (options?.beginning) withoutHistory(() => set({ ...next, history: EMPTY_HISTORY }))
     else set(next)
@@ -913,6 +929,7 @@ function restore(
       colors: moment.colors,
       placements: [...moment.placements],
       selectedIds: [...moment.selectedIds],
+      sizeFromRestore: false,
       history,
     }),
   )
