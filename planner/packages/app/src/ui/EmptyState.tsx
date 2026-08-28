@@ -12,6 +12,11 @@ import { useStore } from '../store'
  * The overlay is `pointer-events: none` apart from its button. An empty
  * wall is exactly when someone is most likely to drag their first part onto
  * it, and a panel that swallowed that drop would be worse than no panel.
+ *
+ * It used to end with three keyboard shortcuts. They are in the shortcuts
+ * dialog now, with the rest — three of a dozen, chosen because they fitted on
+ * one line, was never a list anyone could rely on, and a first visit is
+ * already asking someone to take in what a sidepiece is.
  */
 
 /** The canonical joint, by name — the one the whole project is built around. */
@@ -63,9 +68,6 @@ export function EmptyState() {
             Build an example
           </button>
         ) : null}
-        <p className="empty-keys">
-          <kbd>F</kbd> face the wall · <kbd>⇧</kbd>drag to select · <kbd>Del</kbd> remove
-        </p>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import { Button, Toolbar, useToastManager } from '../components'
+import { MOD } from '../platform'
 import { useStore } from '../store'
 import { pasteNotice } from '../useClipboard'
 
@@ -16,7 +17,13 @@ import { pasteNotice } from '../useClipboard'
  * place the session's own clipping is allowed to stand in for it.
  */
 
-/** Copy and cut, in the hint line beside the selection they act on. */
+/**
+ * Copy and cut, in the selection bar beside the selection they act on.
+ *
+ * A fragment rather than a toolbar of its own: the selection bar is the
+ * toolbar now, and a nested one would be a second tab stop inside a cluster
+ * that exists to be one.
+ */
 export function CopyCut() {
   const selectedIds = useStore((s) => s.selectedIds)
   if (selectedIds.length === 0) return null
@@ -33,22 +40,20 @@ export function CopyCut() {
   }
 
   return (
-    // No class on the buttons: `.selection-actions button` already sizes them,
-    // and they are deliberately smaller than the header's `ghost-button`.
-    <Toolbar.Root className="selection-actions" aria-label="Clipboard">
+    <>
       <Toolbar.Button
-        title="Copy the selection (⌘C)"
+        title={`Copy the selection (${MOD}C)`}
         onClick={() => void put(useStore.getState().copySelection())}
       >
         Copy
       </Toolbar.Button>
       <Toolbar.Button
-        title="Cut the selection (⌘X)"
+        title={`Cut the selection (${MOD}X)`}
         onClick={() => void put(useStore.getState().cutSelection())}
       >
         Cut
       </Toolbar.Button>
-    </Toolbar.Root>
+    </>
   )
 }
 
@@ -102,7 +107,7 @@ export function PasteButton() {
   // A plain button, not a toolbar item: it stands alone in the header, and a
   // toolbar of one is a tab stop that goes nowhere.
   return (
-    <Button onClick={() => void paste()} title="Paste parts (⌘V)">
+    <Button onClick={() => void paste()} title={`Paste parts (${MOD}V)`}>
       Paste
     </Button>
   )

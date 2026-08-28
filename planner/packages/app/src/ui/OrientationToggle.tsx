@@ -1,5 +1,5 @@
 import type { Orientation } from '@ddd-planner/core'
-import { Toggle, ToggleGroup } from '../components'
+import { Toggle, ToggleGroup, Toolbar } from '../components'
 import { orientationsOf, partById, useStore } from '../store'
 
 const LABEL: Record<Orientation, string> = {
@@ -8,8 +8,27 @@ const LABEL: Record<Orientation, string> = {
 }
 
 const TITLE: Record<Orientation, string> = {
-  flat: 'Hangs in the plane of the wall, between two sidepieces',
-  shelf: 'Lies horizontal, dropped into the pockets along a sidepiece’s arm',
+  flat: 'Hangs in the plane of the wall, between two sidepieces (R)',
+  shelf: 'Lies horizontal, dropped into the pockets along a sidepiece’s arm (R)',
+}
+
+/**
+ * The parts of the selection that can actually be turned.
+ *
+ * Exported as a hook because the selection bar has to know the same thing to
+ * decide whether a separator belongs beside this control, and two functions
+ * that agreed about it today would eventually disagree.
+ */
+export function useTurnable() {
+  const catalog = useStore((s) => s.catalog)
+  const placements = useStore((s) => s.placements)
+  const selectedIds = useStore((s) => s.selectedIds)
+
+  return placements.filter((p) => {
+    if (!selectedIds.includes(p.id)) return false
+    const part = partById(catalog, p.partId)
+    return part !== null && orientationsOf(part).length > 1
+  })
 }
 
 /**
@@ -23,18 +42,17 @@ const TITLE: Record<Orientation, string> = {
  *
  * Shown only when the selection contains something that can actually be
  * turned, so it never appears as a dead control next to a bracket.
+ *
+ * The `R` chip that used to sit beside it is gone with every other `<kbd>` in
+ * the bar; the key is in the two tooltips instead, and in the shortcuts
+ * dialog. Belongs inside a `Toolbar.Root` — its buttons register with the
+ * toolbar around it so the arrow keys run through the whole selection bar
+ * rather than stopping at the edge of this pair.
  */
 export function OrientationToggle() {
-  const catalog = useStore((s) => s.catalog)
-  const placements = useStore((s) => s.placements)
-  const selectedIds = useStore((s) => s.selectedIds)
   const setOrientation = useStore((s) => s.setOrientation)
+  const turnable = useTurnable()
 
-  const selected = placements.filter((p) => selectedIds.includes(p.id))
-  const turnable = selected.filter((p) => {
-    const part = partById(catalog, p.partId)
-    return part !== null && orientationsOf(part).length > 1
-  })
   if (turnable.length === 0) return null
 
   // With a mixed selection neither button is "the" current state, so neither
@@ -61,11 +79,14 @@ export function OrientationToggle() {
       }}
     >
       {(['flat', 'shelf'] as const).map((orientation) => (
-        <Toggle key={orientation} value={orientation} title={TITLE[orientation]}>
+        <Toolbar.Button
+          key={orientation}
+          render={<Toggle<Orientation> value={orientation} />}
+          title={TITLE[orientation]}
+        >
           {LABEL[orientation]}
-        </Toggle>
+        </Toolbar.Button>
       ))}
-      <kbd>R</kbd>
     </ToggleGroup>
   )
 }

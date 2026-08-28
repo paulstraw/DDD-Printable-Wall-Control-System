@@ -41,6 +41,20 @@ body,
   letter-spacing: -0.01em;
 }
 
+/*
+ * The wall size, now a trigger that is the size. Tabular figures because the
+ * popover opens beside the trigger rather than over it, so the numbers change
+ * under a scrub while you are reading them, and proportional digits make them
+ * jitter sideways.
+ */
+.wall-size-trigger {
+  font-variant-numeric: tabular-nums;
+}
+
+.wall-size-popup {
+  min-width: 15rem;
+}
+
 .wall-size {
   display: flex;
   align-items: center;
@@ -75,7 +89,14 @@ body,
   color: var(--muted);
 }
 
-.hint {
+/*
+ * `.hint` is down to one job: the line shown while a part is following the
+ * cursor, which is the only mode this app has. Everything else it used to
+ * carry is either a control in the selection bar or a row in the shortcuts
+ * dialog.
+ */
+.hint,
+.selection-bar {
   margin-left: auto;
 }
 
@@ -107,7 +128,6 @@ body,
   cursor: default;
 }
 
-.wall-actions,
 .undo-redo {
   display: flex;
   align-items: center;
@@ -134,6 +154,10 @@ body,
 }
 
 .save-assembly {
+  min-width: 18rem;
+}
+
+.save-assembly-field {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -160,30 +184,40 @@ kbd {
   background: #fff;
 }
 
-/*
- * Flat / shelf, in the header beside the selection it acts on.
+/* ---------------------------------------------------------------------------
+ * The selection bar
  *
- * A segmented pair rather than one toggling button: the two orientations are
- * peers, and with a mixed selection neither is pressed, which a single button
- * has no way to say.
- */
-/*
- * Copy and cut, in the hint line beside the selection they act on — the same
- * place and for the same reason as the flat/shelf toggle. Both are as
- * selection-dependent as nudge and remove, and neither is chrome anyone needs
- * looking at while nothing is selected.
- */
-.selection-actions,
-.orientation-toggle {
-  display: inline-flex;
+ * The right-hand end of the header: everything that acts on whatever is
+ * selected, and nothing that does not. One toolbar, so it is one tab stop
+ * with the arrow keys running through it, and separators so a row of
+ * same-sized buttons still reads as four groups.
+ *
+ * The buttons here are deliberately smaller than the header's `ghost-button`.
+ * They come and go with the selection, and at full size a cluster appearing
+ * and disappearing pulls the eye harder than the selection itself does.
+ * ------------------------------------------------------------------------- */
+
+.selection-bar {
+  display: flex;
   align-items: center;
   gap: 0.3rem;
-  margin-left: 0.45rem;
-  vertical-align: middle;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
-.selection-actions button,
-.orientation-toggle button {
+/*
+ * The name gets a ceiling and wraps inside it. Not an ellipsis: part names in
+ * this library differ in their last word — "3x3 Spacer blank" against "3x3
+ * Spacer blank with countersink" — so a cut name would hide the only thing
+ * that tells them apart. The bar grows a little taller for a long one, which
+ * is the cheaper of the two costs.
+ */
+.selection-name {
+  max-width: 14rem;
+  line-height: 1.25;
+}
+
+.selection-bar button {
   font: inherit;
   font-size: 0.72rem;
   padding: 0.12rem 0.45rem;
@@ -194,8 +228,55 @@ kbd {
   cursor: pointer;
 }
 
+/*
+ * Flat / shelf: a segmented pair rather than one toggling button, because the
+ * two orientations are peers and with a mixed selection neither is pressed,
+ * which a single button has no way to say.
+ */
+.orientation-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+
 .orientation-toggle button + button {
-  margin-left: -0.3rem;
+  margin-left: -1px;
+}
+
+.orientation-toggle button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.orientation-toggle button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+/*
+ * Paint: a chip and a word. The chip is the only part of a collapsed control
+ * that still reports state, so it carries all three answers — one color, the
+ * wall's color when the selection is inheriting, and a split when there is no
+ * single answer to give.
+ */
+.paint-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.paint-chip {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: none;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+}
+
+/* Two colors that are not a color, for a selection that is several. */
+.paint-chip.is-mixed {
+  background: linear-gradient(135deg, #d7dbe0 0 50%, #8b929b 50% 100%);
+}
+
+.paint-popup {
+  min-width: 17rem;
 }
 
 .viewport {
@@ -818,12 +899,6 @@ canvas {
   pointer-events: auto;
 }
 
-.empty-keys {
-  margin: 0.7rem 0 0;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
 .download-warning {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;
@@ -885,7 +960,8 @@ canvas {
     padding: 0.5rem 0.7rem;
   }
 
-  .hint {
+  .hint,
+  .selection-bar {
     margin-left: 0;
   }
 
@@ -1098,10 +1174,132 @@ canvas {
   font-weight: 650;
 }
 
+/*
+ * Every popover in the app puts its description last — under the controls it
+ * is describing — so the margin is on top. It read as a caption hugging the
+ * bottom edge before, which is the one place it was not.
+ */
 .popover-description {
-  margin: 0 0 0.5rem;
+  margin: 0.5rem 0 0;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------------
+ * The dialog
+ *
+ * One user, the shortcuts list, and it is a dialog rather than a popover for
+ * the backdrop: there is nothing behind it worth watching, and the keyboard
+ * handler reads "something is in front of the wall" off the DOM to stop
+ * bare-letter shortcuts firing behind it.
+ * ------------------------------------------------------------------------- */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(20, 25, 35, 0.4);
+}
+
+.dialog-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 41;
+  max-width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  padding: 1.1rem 1.25rem;
+  background: var(--bar);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(20, 25, 35, 0.24);
+  outline: none;
+}
+
+.dialog-title {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------------------
+ * The shortcuts list
+ *
+ * Two columns where there is room for two, because the four groups are short
+ * and a single column would make a scrollable list out of something that
+ * should be one glance.
+ * ------------------------------------------------------------------------- */
+
+/*
+ * `?` is a word in this position rather than a picture, which is why this is
+ * the app's one icon-only control. Squared off so it reads as a single glyph
+ * and not as a button with a very short label.
+ */
+.shortcuts-trigger {
+  width: 1.7rem;
+  padding: 0.25rem 0;
+  text-align: center;
+  font-weight: 650;
+}
+
+/*
+ * Width on the list rather than on `.dialog-popup`: a dialog should be as
+ * wide as what is in it, and what is in this one is two columns that only
+ * exist if there is room for both.
+ */
+.shortcuts {
+  width: min(42rem, calc(100vw - 2rem));
+}
+
+.shortcuts-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.4rem 2rem;
+}
+
+.shortcuts-groups h3 {
+  margin: 0.6rem 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.shortcuts-groups dl {
+  margin: 0;
+}
+
+/*
+ * Keys right-aligned in a fixed column so the chips line up down the page and
+ * the descriptions all start at the same x. A ragged key column is the thing
+ * that makes a shortcut list unreadable.
+ */
+.shortcut {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.18rem 0;
+}
+
+.shortcut dt {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+
+.shortcut dd {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.shortcuts-close {
+  margin-top: 1.1rem;
 }
 
 /*
@@ -1326,6 +1524,61 @@ canvas {
   padding: 0.12rem 0.4rem;
 }
 
+/* ---------------------------------------------------------------------------
+ * Share, export and import, in a popover
+ *
+ * A column of full-width rows rather than a row of buttons, because each one
+ * gets a line saying what it does — which is the whole reason they moved off
+ * the bar. Import replaces everything on the wall with no confirmation, and
+ * as a bare word between two other bare words it never had anywhere to say
+ * so.
+ * ------------------------------------------------------------------------- */
+
+.wall-actions {
+  min-width: 16rem;
+}
+
+.wall-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wall-action:hover:not(:disabled):not([data-disabled]) {
+  background: var(--bg);
+}
+
+.wall-action:disabled,
+.wall-action[data-disabled] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.wall-action-name {
+  font-size: 0.82rem;
+}
+
+.wall-action-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* A disabled row's note has to dim with it, or it looks like the live one. */
+.wall-action:disabled .wall-action-note,
+.wall-action[data-disabled] .wall-action-note {
+  color: #a6acb5;
+}
+
 /* The wall's three rows, in the header popover. */
 .wall-colors {
   min-width: 17rem;
@@ -1343,18 +1596,6 @@ canvas {
   flex: none;
   font-size: 0.78rem;
   color: var(--muted);
-}
-
-/*
- * The selection's picker, in the hint row. Matches the spacing the
- * orientation toggle and copy/cut already use so the row reads as one line
- * rather than three controls that arrived separately.
- */
-.paint-selection {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.45rem;
-  vertical-align: middle;
 }
 
 /*

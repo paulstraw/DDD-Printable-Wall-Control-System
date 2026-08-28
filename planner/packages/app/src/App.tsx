@@ -1,24 +1,22 @@
 import { Canvas } from '@react-three/fiber'
-import { slotColumnCount, slotRowCount } from '@ddd-planner/core'
 import { BomPanel } from './bom/BomPanel'
 import { CatalogPanel } from './catalog/CatalogPanel'
 import { Scene } from './scene/Scene'
-import { partById, useStore } from './store'
+import { useStore } from './store'
 import { useClipboard } from './useClipboard'
 import { useKeyboard } from './useKeyboard'
 import { usePersistence } from './usePersistence'
-import { CopyCut, PasteButton } from './ui/Clipboard'
+import { PasteButton } from './ui/Clipboard'
 import { EmptyState } from './ui/EmptyState'
 import { Toasts } from './ui/Toasts'
 import { SectionHud } from './ui/SectionHud'
 import { IssuesPanel } from './ui/IssuesPanel'
-import { OrientationToggle } from './ui/OrientationToggle'
-import { PaintSelection } from './ui/PaintSelection'
-import { SaveAssembly } from './ui/SaveAssembly'
+import { SelectionBar } from './ui/SelectionBar'
+import { Shortcuts } from './ui/Shortcuts'
 import { UndoRedo } from './ui/UndoRedo'
 import { WallActions } from './ui/WallActions'
 import { WallColors } from './ui/WallColors'
-import { WallSizeControls } from './ui/WallSizeControls'
+import { WallSize } from './ui/WallSize'
 
 export function App() {
   useKeyboard()
@@ -26,64 +24,28 @@ export function App() {
   usePersistence()
 
   const board = useStore((s) => s.board)
-  const widthIn = useStore((s) => s.widthIn)
-  const heightIn = useStore((s) => s.heightIn)
-  const setWallSize = useStore((s) => s.setWallSize)
-  const placements = useStore((s) => s.placements)
-  const catalog = useStore((s) => s.catalog)
-  const selectedIds = useStore((s) => s.selectedIds)
-  const dragging = useStore((s) => s.dragging)
-
-  // One selected part gets named; several get counted. Naming the last one
-  // clicked would be worse than useless — it hides that others will move too.
-  const only = selectedIds.length === 1 ? placements.find((p) => p.id === selectedIds[0]) : null
-  const selectedPart = partById(catalog, only?.partId ?? null)
 
   return (
     <div className="app">
+      {/*
+        The bar, in three parts: what the document is, what you can do to it,
+        and — pushed to the right — what you can do to the selection.
+
+        Almost everything here is a trigger rather than the control itself.
+        That is the trade this header makes on purpose: the wall size, the
+        colors, the file actions and the paint are all set a handful of times
+        in a session, and each was holding permanent space in a row that had
+        run out of it. One click each buys back a bar you can read.
+      */}
       <header className="bar">
         <h1>Wall planner</h1>
-        <WallSizeControls widthIn={widthIn} heightIn={heightIn} onChange={setWallSize} />
-        <span className="count">
-          {slotColumnCount(board)} × {slotRowCount(board)} slots · {placements.length} placed
-        </span>
-        <SaveAssembly />
+        <WallSize />
+        <WallColors />
         <UndoRedo />
         <PasteButton />
-        <WallColors />
         <WallActions />
-        <span className="hint">
-          {dragging ? (
-            <>
-              <strong>Tap the wall to place</strong> · tap the part again to cancel
-            </>
-          ) : selectedPart ? (
-            <>
-              <strong>{selectedPart.name}</strong>
-              {selectedPart.supported === false ? (
-                <span className="warn-note"> · for a horizontal panel — position is not meaningful</span>
-              ) : null}{' '}
-              · <kbd>←→↑↓</kbd> nudge · <kbd>Del</kbd> remove
-              <OrientationToggle />
-              <PaintSelection />
-              <CopyCut />
-            </>
-          ) : selectedIds.length > 1 ? (
-            <>
-              <strong>{selectedIds.length} selected</strong> · <kbd>←→↑↓</kbd> move together ·{' '}
-              <kbd>Del</kbd> remove
-              <OrientationToggle />
-              <PaintSelection />
-              <CopyCut />
-            </>
-          ) : (
-            <>
-              drag a part onto the wall · <kbd>⇧</kbd>click or <kbd>⇧</kbd>drag to
-              select · <kbd>F</kbd> to face it · <kbd>C</kbd> to cut ·{' '}
-              <kbd>⌘Z</kbd> to undo
-            </>
-          )}
-        </span>
+        <SelectionBar />
+        <Shortcuts />
       </header>
 
       <div className="body">
