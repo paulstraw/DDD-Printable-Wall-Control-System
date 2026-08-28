@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useToastManager } from './components'
 import type { PasteResult } from './store'
 import { useStore } from './store'
-import { isTyping } from './useKeyboard'
+import { keyboardIsSpokenFor } from './useKeyboard'
 
 /**
  * What to say about a paste, or `null` when it went perfectly and needs no
@@ -43,8 +43,10 @@ export function pasteNotice(result: PasteResult): string | null {
  */
 function wallOwnsGesture(target: EventTarget | null): boolean {
   // The same answer `useKeyboard` uses, from the same function. Two functions
-  // that agreed about this today would eventually disagree.
-  if (isTyping(target)) return false
+  // that agreed about this today would eventually disagree. It covers popups
+  // as well as text boxes, which matters here too: the BOM's copy button and
+  // an assembly name typed into a popover both want the gesture.
+  if (keyboardIsSpokenFor(target)) return false
 
   // Highlighted text is the user's to copy, not ours to take.
   const selection = window.getSelection()

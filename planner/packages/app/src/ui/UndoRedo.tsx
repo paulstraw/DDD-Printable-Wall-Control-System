@@ -1,5 +1,6 @@
 import { Toolbar } from '../components'
 import { canRedo, canUndo } from '../history'
+import { MOD } from '../platform'
 import { useStore } from '../store'
 
 /**
@@ -19,10 +20,6 @@ import { useStore } from '../store'
  * down to an empty history leaves focus on Undo instead of dropping it — the
  * exact moment you are most likely to want Redo, one arrow key away.
  */
-
-/** ⌘ or Ctrl, so the tooltip names the key this machine actually has. */
-const APPLE = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-const MOD = APPLE ? '⌘' : 'Ctrl+'
 
 export function UndoRedo() {
   const undo = useStore((s) => s.undo)

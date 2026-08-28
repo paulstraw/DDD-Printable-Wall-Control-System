@@ -2,10 +2,40 @@ import { useEffect } from 'react'
 import { useStore } from './store'
 
 /** Whether the event landed in something the user is typing into. */
-export function isTyping(target: EventTarget | null): boolean {
+function isTyping(el: HTMLElement): boolean {
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+}
+
+/**
+ * Whether the event landed inside a popup — a dialog or a popover panel.
+ *
+ * Read off the DOM rather than tracked in the store. Base UI gives both
+ * `role="dialog"`, so one selector covers every overlay in the app and covers
+ * the ones nobody has written yet; a flag would have to be set and unset by
+ * each overlay in turn, and the one that forgot would be a bug nobody could
+ * see.
+ */
+function inPopup(el: Element): boolean {
+  return el.closest('[role="dialog"]') !== null
+}
+
+/**
+ * Whether the keyboard is spoken for by something other than the wall.
+ *
+ * Typing was the original case and the obvious one. The popup case is the
+ * quiet one: this app binds bare letters on `window`, so with the color
+ * popover open, `R` still turned the selection and `C` still cut a section
+ * behind it — an edit to the wall with nothing on screen to explain it. The
+ * shortcuts dialog would have made that a routine accident, since reading a
+ * list of keys is exactly when someone tries one.
+ *
+ * Shared with the clipboard gestures. Two functions that agreed about this
+ * today would eventually disagree.
+ */
+export function keyboardIsSpokenFor(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el) return false
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+  return isTyping(el) || inPopup(el)
 }
 
 /**
@@ -32,7 +62,7 @@ export function useKeyboard() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (isTyping(event.target)) return
+      if (keyboardIsSpokenFor(event.target)) return
 
       // The modifier keys, before the plain-key switch, so the browser's own
       // select-all never fires over the canvas.
