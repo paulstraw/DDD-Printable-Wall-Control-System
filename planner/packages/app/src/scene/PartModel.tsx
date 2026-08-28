@@ -4,10 +4,11 @@ import { MeshoptDecoder } from 'meshoptimizer'
 import { Quaternion, Vector3 } from 'three'
 import type { BufferGeometry, Mesh, Object3D } from 'three'
 import type { GLTFLoader } from 'three-stdlib'
-import { type Orientation, type OrientedPlacement, placementOrigin } from '@ddd-planner/core'
+import { type Orientation, type OrientedPlacement, type Point2, placementOrigin } from '@ddd-planner/core'
 import { PARTS_BASE } from '../catalog/useCatalog'
 import { type CatalogPart, orientedFor } from '../store'
 import { modifierHeld } from '../useModifier'
+import { wallPointFrom } from './wallPlane'
 
 /**
  * The selection outline: a thick dark ring with a thinner accent one drawn
@@ -213,7 +214,8 @@ export function PartModel({
   color,
   selected,
   pickable = true,
-  onSelect,
+  onPress,
+  onHover,
 }: {
   part: CatalogPart
   col: number
@@ -223,15 +225,27 @@ export function PartModel({
   color: string
   selected: boolean
   /**
-   * False once the section has cut this part away entirely.
+   * False when this part should not take the press: the section has cut it
+   * away entirely, or a catalog part is already in hand and the press
+   * belongs to putting *that* down.
    *
    * Dropping the handler rather than hiding the part is what makes this
    * work: r3f only raycasts objects that carry one, so an unpickable part
    * leaves the interaction set altogether and the press falls through to
-   * the wall behind it — which is what a click on nothing should do.
+   * the wall behind it — which is what a click on nothing should do, and
+   * what finally lets tap-to-place land on a spot that is already occupied.
    */
   pickable?: boolean
-  onSelect: (additive: boolean) => void
+  /**
+   * The press, with the point it landed on the wall plane.
+   *
+   * The point comes off the ray rather than off `e.point`, which is the hit
+   * on this part's own surface — 50 mm proud of the board and seen at an
+   * angle, that projects more than a column away from where the cursor
+   * actually is, and every drag would begin with a jump.
+   */
+  onPress: (additive: boolean, point: Point2) => void
+  onHover: (hovering: boolean) => void
 }) {
   const oriented = orientedFor(part, orientation)
   const origin = placementOrigin(oriented.rule, part.h, { col, row })
@@ -243,15 +257,20 @@ export function PartModel({
       onPointerDown={
         pickable
           ? (e) => {
+              const point = wallPointFrom(e.ray)
+              if (point === null) return
               e.stopPropagation()
-        // Shift and Cmd/Ctrl both add to the selection — the two conventions
-        // people arrive with, and neither is worth being pedantic about.
-        // Read from the same place the box-select and the camera read it,
-        // rather than off this event, so the three cannot disagree.
-              onSelect(modifierHeld())
+              // Shift and Cmd/Ctrl both add to the selection — the two
+              // conventions people arrive with, and neither is worth being
+              // pedantic about. Read from the same place the box-select and
+              // the camera read it, rather than off this event, so the three
+              // cannot disagree.
+              onPress(modifierHeld(), point)
             }
           : undefined
       }
+      onPointerOver={pickable ? () => onHover(true) : undefined}
+      onPointerOut={pickable ? () => onHover(false) : undefined}
     >
       <Suspense fallback={null}>
         <group rotation={[rotationX, 0, 0]} position={offset}>

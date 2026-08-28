@@ -12,6 +12,8 @@ import {
 } from '@ddd-planner/core'
 import { type CatalogFile, orientationsOf, orientedFor, partById, useStore } from '../store'
 import { useModifier } from '../useModifier'
+import { WALL_PLANE_Y } from './wallPlane'
+import { useWallPointer } from './useWallPointer'
 
 /**
  * The wall plane a drag lands on.
@@ -23,6 +25,12 @@ import { useModifier } from '../useModifier'
  * It does double duty as the marquee surface. A modifier-held drag across
  * bare wall box-selects; a plain drag is left to the camera; a press that
  * never moves clears the selection.
+ *
+ * What it owns is the **press**, and only the press. Once a gesture is under
+ * way the pointer is followed on the window instead, because it spends most
+ * of a drag somewhere this mesh is not — see `useWallPointer`. The mesh
+ * stays exactly board-sized, which `SectionHandle` depends on: it parks
+ * itself just outside this silhouette so that a press can reach it at all.
  */
 export function DropTarget({ board }: { board: Board }) {
   const dragging = useStore((s) => s.dragging)
@@ -30,8 +38,13 @@ export function DropTarget({ board }: { board: Board }) {
   const dropDrag = useStore((s) => s.dropDrag)
   const marquee = useStore((s) => s.marquee)
   const beginMarquee = useStore((s) => s.beginMarquee)
-  const updateMarquee = useStore((s) => s.updateMarquee)
   const endMarquee = useStore((s) => s.endMarquee)
+  const moving = useStore((s) => s.moving)
+  const endMove = useStore((s) => s.endMove)
+
+  // Everything that happens *between* the press and the release is tracked
+  // on the window instead of on this mesh — see `useWallPointer`.
+  useWallPointer(board)
 
   // The same modifier state the camera stands down for — deliberately the
   // same source. Reading `shiftKey` off the pointer event here instead would
@@ -47,6 +60,16 @@ export function DropTarget({ board }: { board: Board }) {
     return () => window.removeEventListener('pointerup', onUp)
   }, [dragging, dropDrag])
 
+  // And so can a move, which commits wherever the parts visibly stand rather
+  // than snapping back. Nothing else in the app treats leaving the canvas as
+  // a cancel, and Escape is the thing that does.
+  useEffect(() => {
+    if (!moving) return
+    const onUp = () => endMove()
+    window.addEventListener('pointerup', onUp)
+    return () => window.removeEventListener('pointerup', onUp)
+  }, [moving, endMove])
+
   // Same for a marquee: releasing outside the wall must still commit it,
   // otherwise the band is left hanging on screen.
   useEffect(() => {
@@ -58,17 +81,8 @@ export function DropTarget({ board }: { board: Board }) {
 
   return (
     <mesh
-      position={[board.widthMm / 2, -0.2, board.heightMm / 2]}
+      position={[board.widthMm / 2, WALL_PLANE_Y, board.heightMm / 2]}
       rotation={[Math.PI / 2, 0, 0]}
-      onPointerMove={(e) => {
-        if (dragging) {
-          const slot = nearestSlot(board, e.point.x, e.point.z)
-          setHoverSlot(slot ? { col: slot.col, row: slot.row } : null)
-        } else if (marquee) {
-          updateMarquee({ x: e.point.x, z: e.point.z })
-        }
-      }}
-      onPointerOut={() => dragging && setHoverSlot(null)}
       onPointerDown={(e) => {
         if (dragging) {
           // A touch screen has no hover, so the press itself is what picks

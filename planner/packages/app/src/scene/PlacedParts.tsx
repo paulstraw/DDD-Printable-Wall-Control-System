@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { useThree } from '@react-three/fiber'
 import { placementOrigin, resolveColor } from '@ddd-planner/core'
 import { orientedFor, partById, useStore } from '../store'
 import { PartModel } from './PartModel'
@@ -7,7 +9,9 @@ export function PlacedParts() {
   const catalog = useStore((s) => s.catalog)
   const placements = useStore((s) => s.placements)
   const selectedIds = useStore((s) => s.selectedIds)
-  const select = useStore((s) => s.select)
+  const pressPart = useStore((s) => s.pressPart)
+  const dragging = useStore((s) => s.dragging)
+  const moving = useStore((s) => s.moving)
   // The wall's default, which every unpainted part inherits. Read once here
   // rather than in each part, so changing it repaints the wall in one pass.
   const defaultColor = useStore((s) => s.colors.parts)
@@ -22,6 +26,22 @@ export function PlacedParts() {
   const plane = section.on
     ? sectionPlane(section.axis, section.depth, section.flipped)
     : null
+
+  const setHovering = useCursor(moving !== null, placements.length)
+
+  /**
+   * Stood down by hand on the press, not by prop — the same thing
+   * `SectionHandle` has to do, for the same reason and with the same
+   * comment on it. OrbitControls claims the pointerdown before React hears
+   * about it, so a part dragged to another slot arrived there with the
+   * camera having swung the whole way as well, and the delta was measured
+   * against a view that was moving under it. Its move handler re-checks
+   * `enabled` on every event, so clearing the flag inside the press kills
+   * the orbit it just began; `handsOnWall` then holds it down through
+   * `Scene` for the rest of the gesture and puts it back on release, which
+   * is why nothing here ever sets it true.
+   */
+  const controls = useThree((s) => s.controls) as { enabled: boolean } | null
 
   return (
     <group>
@@ -40,10 +60,15 @@ export function PlacedParts() {
             // it the same question.
             color={resolveColor(placement, defaultColor)}
             selected={selectedIds.includes(placement.id)}
-            pickable={plane === null || !hiddenBySection(drawnBox(part, placement), plane)}
-            onSelect={(additive) =>
-              select(placement.id, additive ? 'toggle' : 'replace')
+            pickable={
+              dragging === null &&
+              (plane === null || !hiddenBySection(drawnBox(part, placement), plane))
             }
+            onPress={(additive, point) => {
+              if (controls !== null) controls.enabled = false
+              pressPart(placement.id, additive, point)
+            }}
+            onHover={setHovering}
           />
         )
       })}
@@ -63,4 +88,34 @@ function drawnBox(
     min: origin,
     max: { x: origin.x + x, y: origin.y + y, z: origin.z + z },
   }
+}
+
+/**
+ * `grab` over a part you can pick up, `grabbing` while you are.
+ *
+ * The same two words `.part` and `.assembly` already use in `index.css` for
+ * the catalog cards and the saved assemblies — placed parts were the one
+ * draggable thing on screen saying nothing at all, and dragging one is a
+ * gesture nobody is going to be told about anywhere else.
+ *
+ * Set on the canvas rather than through a class, because the thing the
+ * pointer is over is a mesh and React never hears about it. `count` is in
+ * the dependencies for the one case r3f cannot report: a part deleted from
+ * under the cursor unmounts without ever sending `pointerout`, and the grab
+ * hand would sit there over bare board until you found another part.
+ */
+function useCursor(moving: boolean, count: number): (hovering: boolean) => void {
+  const canvas = useThree((s) => s.gl.domElement)
+  const [hovering, setHovering] = useState(false)
+
+  useEffect(() => setHovering(false), [count])
+
+  useEffect(() => {
+    canvas.style.cursor = moving ? 'grabbing' : hovering ? 'grab' : ''
+    return () => {
+      canvas.style.cursor = ''
+    }
+  }, [canvas, moving, hovering])
+
+  return setHovering
 }

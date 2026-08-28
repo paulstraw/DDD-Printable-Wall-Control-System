@@ -15,6 +15,8 @@
  * This module is the only place those numbers live.
  */
 
+import type { Point2 } from './selection'
+
 /** Millimetres per inch. The Wall Control grid is an imperial pattern. */
 export const MM_PER_INCH = 25.4
 
@@ -279,4 +281,39 @@ export function slotSpanHeightMm(slotCount: number): number {
     throw new RangeError(`slotCount must be a positive integer, got ${slotCount}`)
   }
   return (slotCount - 1) * SLOT_ROW_PITCH_MM + SLOT_HEIGHT_MM
+}
+
+/**
+ * How many slots a pointer has carried something, from where it went down to
+ * where it is now.
+ *
+ * Quantising the *difference*, rather than differencing two quantisations.
+ * That is what keeps a drag honest wherever inside a slot it began: grab a
+ * part a millimetre from a column line, and taking `nearestSlot` at both ends
+ * would let a two-millimetre twitch carry it a whole column. Measured from
+ * the grab point, half a pitch of travel is what moves a slot, and the part
+ * keeps its offset from the pointer for free — a three-column plate grabbed
+ * at its right end stays grabbed there.
+ *
+ * The row pitch is twice the column pitch, so each axis carries its own
+ * divisor rather than sharing one.
+ */
+export function slotDelta(from: Point2, to: Point2): { dCol: number; dRow: number } {
+  return {
+    dCol: pitches(to.x - from.x, COLUMN_PITCH_MM),
+    dRow: pitches(to.z - from.z, SLOT_ROW_PITCH_MM),
+  }
+}
+
+/**
+ * Travel in whole pitches, with the sign taken off zero.
+ *
+ * `Math.round` gives `-0` for anything in the last half-pitch below zero.
+ * It adds and compares as zero, so nothing downstream would notice — but it
+ * is a different value under `Object.is`, which is what `toEqual` and every
+ * memo comparison use, so a zero delta would fail to match a zero delta.
+ */
+function pitches(distanceMm: number, pitchMm: number): number {
+  const n = Math.round(distanceMm / pitchMm)
+  return n === 0 ? 0 : n
 }

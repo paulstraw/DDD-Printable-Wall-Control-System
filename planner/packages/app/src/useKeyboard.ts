@@ -42,7 +42,7 @@ export function keyboardIsSpokenFor(target: EventTarget | null): boolean {
  * Arrow keys nudge the selection by one slot; Delete removes it; R turns it
  * between flat and shelf; C cuts a cross-section through the wall; Cmd/Ctrl+A
  * takes everything; Cmd/Ctrl+Z steps back and Cmd/Ctrl+Shift+Z steps forward;
- * Escape deselects or abandons a drag.
+ * Escape deselects, abandons a drag, or puts back a move in progress.
  *
  * A nudge is a whole slot, not a pixel — there is nowhere else a part can go,
  * so free movement would only ever be undone by the snap. Every one of these
@@ -54,6 +54,7 @@ export function useKeyboard() {
   const removeSelected = useStore((s) => s.removeSelected)
   const select = useStore((s) => s.select)
   const cancelDrag = useStore((s) => s.cancelDrag)
+  const cancelMove = useStore((s) => s.cancelMove)
   const selectAll = useStore((s) => s.selectAll)
   const setOrientation = useStore((s) => s.setOrientation)
   const toggleSection = useStore((s) => s.toggleSection)
@@ -63,6 +64,19 @@ export function useKeyboard() {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (keyboardIsSpokenFor(event.target)) return
+
+      // Mid-move, the wall answers to the pointer and to Escape, and to
+      // nothing else. ⌘Z during a drag would swap the placements out from
+      // under a gesture still holding the array it started with, and the
+      // release would then commit a delta against a wall that no longer
+      // exists; Delete and the arrow keys go wrong the same way. The user is
+      // in the middle of one gesture and has not asked for a second.
+      if (useStore.getState().moving !== null) {
+        if (event.key !== 'Escape') return
+        cancelMove()
+        event.preventDefault()
+        return
+      }
 
       // The modifier keys, before the plain-key switch, so the browser's own
       // select-all never fires over the canvas.
@@ -137,5 +151,5 @@ export function useKeyboard() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nudge, removeSelected, select, cancelDrag, selectAll, setOrientation, toggleSection, undo, redo])
+  }, [nudge, removeSelected, select, cancelDrag, cancelMove, selectAll, setOrientation, toggleSection, undo, redo])
 }

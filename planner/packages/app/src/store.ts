@@ -27,6 +27,7 @@ import {
   rectArea,
   rectFromCorners,
   slotColumnCount,
+  slotDelta,
   slotRowCount,
   uniqueAssemblyName,
 } from '@ddd-planner/core'
@@ -196,7 +197,21 @@ interface State {
    * settled. Tracking the rest is still worth it: it is what tells a click
    * apart from an orbit, so orbiting no longer wipes the selection.
    */
-  marquee: { from: Point2; to: Point2; selecting: boolean } | null
+  marquee: {
+    from: Point2
+    to: Point2
+    selecting: boolean
+    /**
+     * The part the band started on, if it started on one.
+     *
+     * A modifier-held press on a part cannot know yet whether it is a click
+     * or the start of a sweep, and the two want opposite things: a click
+     * toggles that part, a sweep adds everything the band catches and would
+     * be spoiled by a toggle it never asked for. So the toggle waits here
+     * until `endMarquee` knows which gesture it was.
+     */
+    pressed: string | null
+  } | null
 
   /**
    * What is being dragged onto the wall, if anything.
@@ -207,6 +222,21 @@ interface State {
    */
   dragging: DragSubject | null
   hoverSlot: { col: number; row: number } | null
+
+  /**
+   * Parts already on the wall, on their way to other slots.
+   *
+   * Deliberately its own state rather than a third `DragSubject`. The two
+   * kinds of `dragging` end by *adding* parts, and this one ends by leaving
+   * the parts it moved exactly where they already are, so a single `dropDrag`
+   * would have to branch on which it was before it could do anything.
+   * `hoverSlot` and the drop ghost have no meaning here either.
+   *
+   * What it costs is that a second thing now has to stand the camera down
+   * and lock the keyboard, which is why nobody reads this field to find that
+   * out — see `handsOnWall`.
+   */
+  moving: MoveDrag | null
   /**
    * Whether the pointer has moved since the drag began.
    *
@@ -244,6 +274,23 @@ interface State {
    * gesture has to skip.
    */
   paintSelection: (color: string | null) => void
+
+  /**
+   * The pointer went down on a placed part.
+   *
+   * One entry point for what used to be a bare `select`, because the press
+   * on a part now has three futures — a click, a move, a box-select — and
+   * only the release knows which. Deciding here is what broke the old
+   * behaviour: selecting on `pointerdown` collapsed a six-part selection to
+   * one the instant you reached for it.
+   */
+  pressPart: (id: string, additive: boolean, point: Point2) => void
+  /** Carry the selection to wherever the pointer has got to. */
+  updateMove: (point: Point2) => void
+  /** Release: commit where the parts stand, in one history entry. */
+  endMove: () => void
+  /** Escape: put them back, and leave no trace on the stack. */
+  cancelMove: () => void
 
   beginPartDrag: (partId: string) => void
   beginAssemblyDrag: (assemblyId: string) => void
@@ -386,6 +433,53 @@ export interface SectionState {
 export type DragSubject =
   | { kind: 'part'; partId: string }
   | { kind: 'assembly'; assemblyId: string }
+
+/** A move of parts that are already on the wall. */
+export interface MoveDrag {
+  /**
+   * Where on the wall plane the press landed. Every delta is measured from
+   * here rather than from the part, so the part keeps its offset from the
+   * pointer and a grab near a column line behaves like a grab in the middle
+   * of one — see `slotDelta`.
+   */
+  readonly from: Point2
+  /**
+   * The wall as it stood at the press.
+   *
+   * Two jobs. It is what Escape puts back, and it is what the single history
+   * entry is written against — the drag itself is silent, so without this
+   * there would be no moment left to record by the time the pointer came up.
+   */
+  readonly origin: Placement[]
+  /**
+   * The part under the press.
+   *
+   * Kept because a release that never moved a slot turns out to have been a
+   * click, and a click on a part that was already selected collapses the
+   * selection onto it. That collapse cannot happen at `pointerdown` without
+   * destroying the very selection the drag is about to carry.
+   */
+  readonly pressed: string
+}
+
+/**
+ * Whether a pointer gesture has hold of the wall.
+ *
+ * One question with one answer. The camera stands down for it, the keyboard
+ * hands over to it, and the pointer tracking runs off it — three call sites
+ * that used to spell the condition out for themselves, which works until a
+ * fourth gesture arrives and one of them is not updated. That failure is
+ * silent and looks like a bug in something else: the camera swinging away
+ * mid-drag, with nothing on screen to say why.
+ */
+export function handsOnWall(s: State): boolean {
+  return (
+    s.dragging !== null ||
+    s.moving !== null ||
+    s.marquee?.selecting === true ||
+    s.section.dragging
+  )
+}
 
 /**
  * Where a group of parts lands when its bottom-left corner is put on
@@ -546,7 +640,78 @@ export const useStore = create<State>((set, get) => ({
 
   dragging: null,
   hoverSlot: null,
+  moving: null,
   dragMoved: false,
+
+  pressPart: (id, additive, point) => {
+    const state = get()
+    // A press that arrives with a catalog part already in hand belongs to
+    // that drop, not to this part. The component drops its handler in that
+    // case so the press falls through to the board; this is the belt to that
+    // brace.
+    if (state.dragging !== null) return
+
+    if (additive) {
+      // A band from here, and the toggle held back until `endMarquee` can
+      // see whether one was actually swept. Before this, a modifier press on
+      // a part could only ever toggle — box-selecting a crowded wall meant
+      // finding bare board to start from.
+      set({ marquee: { from: point, to: point, selecting: true, pressed: id } })
+      return
+    }
+
+    // A part outside the selection becomes the selection, so a loose bracket
+    // is one press away from moving. A part already inside it changes
+    // nothing yet: collapsing here would empty the very selection this drag
+    // exists to carry, and `endMove` can do the collapse later if the
+    // pointer turns out never to have gone anywhere.
+    set({
+      selectedIds: state.selectedIds.includes(id) ? state.selectedIds : [id],
+      moving: { from: point, origin: state.placements, pressed: id },
+    })
+  },
+
+  updateMove: (point) => {
+    const state = get()
+    const { moving } = state
+    if (moving === null) return
+
+    const landed = movedBy(state, moving, slotDelta(moving.from, point))
+    if (landed === state.placements) return
+    // Every frame of the drag is silent. The one entry is written by
+    // `endMove`, which is what lets Escape cost nothing.
+    withoutHistory(() => set({ placements: landed }))
+  },
+
+  endMove: () => {
+    const state = get()
+    const { moving } = state
+    if (moving === null) return
+    const landed = state.placements
+
+    // Never left the slot it started in, so that was a click — and a click
+    // on a part takes the selection, which is the half of `select('replace')`
+    // that had to wait for the release.
+    if (landed === moving.origin) {
+      set({ moving: null, selectedIds: [moving.pressed] })
+      return
+    }
+
+    // Put the wall back, silently, and then set it down where the pointer
+    // left it. That is what hands the subscription in `history.ts` the right
+    // moment to keep: every frame until now was suppressed, so `previous`
+    // would otherwise be the wall mid-drag and ⌘Z would step back to a
+    // position the user never chose. Both writes land in one batch, so
+    // nothing is drawn in between.
+    withoutHistory(() => set({ placements: moving.origin, moving: null }))
+    set({ placements: landed })
+  },
+
+  cancelMove: () => {
+    const { moving } = get()
+    if (moving === null) return
+    withoutHistory(() => set({ placements: moving.origin, moving: null }))
+  },
 
   beginPartDrag: (partId) =>
     set((s) => ({
@@ -771,7 +936,8 @@ export const useStore = create<State>((set, get) => ({
 
   selectAll: () => set((s) => ({ selectedIds: s.placements.map((p) => p.id) })),
 
-  beginMarquee: (point, selecting) => set({ marquee: { from: point, to: point, selecting } }),
+  beginMarquee: (point, selecting) =>
+    set({ marquee: { from: point, to: point, selecting, pressed: null } }),
 
   updateMarquee: (point) =>
     set((s) => (s.marquee ? { marquee: { ...s.marquee, to: point } } : {})),
@@ -783,8 +949,18 @@ export const useStore = create<State>((set, get) => ({
 
     const rect = rectFromCorners(marquee.from, marquee.to)
 
-    // Barely moved: that was a click on bare wall, which clears.
+    // Barely moved: that was a click, and what a click means depends on what
+    // it landed on. On bare wall it clears. On a part held under a modifier
+    // it is the toggle `pressPart` deferred — it had to wait here to find
+    // out whether a sweep was coming after it.
     if (rectArea(rect) < MARQUEE_MIN_AREA_MM2) {
+      if (marquee.pressed !== null) {
+        set({
+          marquee: null,
+          selectedIds: applySelection(state.selectedIds, marquee.pressed, 'toggle'),
+        })
+        return
+      }
       set({ marquee: null, selectedIds: marquee.selecting ? state.selectedIds : [] })
       return
     }
@@ -883,13 +1059,14 @@ export const useStore = create<State>((set, get) => ({
       marquee: null,
       dragging: null,
       hoverSlot: null,
+      moving: null,
       sizeFromRestore: options?.beginning === true,
     }
     if (options?.beginning) withoutHistory(() => set({ ...next, history: EMPTY_HISTORY }))
     else set(next)
   },
 
-  clear: () => set({ placements: [], selectedIds: [], marquee: null }),
+  clear: () => set({ placements: [], selectedIds: [], marquee: null, moving: null }),
 
   undo: () => {
     const state = get()
@@ -951,6 +1128,49 @@ useStore.subscribe((state, previous) => {
   if (!recording || state.placements === previous.placements) return
   useStore.setState({ history: record(previous.history, momentOf(previous)) })
 })
+
+/**
+ * The wall with the selection carried `wanted` slots from where it started,
+ * or `origin` itself when the clamped move comes to nothing.
+ *
+ * Returning the original array by identity is the signal the whole gesture
+ * runs on: `updateMove` skips a write, and `endMove` reads it as "the pointer
+ * never took this anywhere", which is how a drag that wanders out and back
+ * costs no history entry and how a press that only wobbled is still a click.
+ *
+ * Measured from `origin` every time rather than from wherever the last frame
+ * left things, so the arithmetic cannot accumulate: drag a group into the
+ * edge, hold it there while `clampGroupDelta` refuses to move it further,
+ * then come back, and it returns to exactly the slots it left.
+ */
+function movedBy(
+  state: State,
+  moving: MoveDrag,
+  wanted: { dCol: number; dRow: number },
+): Placement[] {
+  const carried = new Set(state.selectedIds)
+  const items = moving.origin
+    .filter((p) => carried.has(p.id))
+    .map((p) => ({
+      col: p.col,
+      row: p.row,
+      spanCols: spanColsOf(state.catalog, p.partId, p.orientation),
+    }))
+  if (items.length === 0) return moving.origin
+
+  // The same clamp the arrow keys use: the group travels as one body or not
+  // at all, so dragging into an edge slides it along rather than folding it
+  // up against the boundary.
+  const move = clampGroupDelta(items, wanted, {
+    cols: slotColumnCount(state.board),
+    rows: slotRowCount(state.board),
+  })
+  if (move.dCol === 0 && move.dRow === 0) return moving.origin
+
+  return moving.origin.map((p) =>
+    carried.has(p.id) ? { ...p, col: p.col + move.dCol, row: p.row + move.dRow } : p,
+  )
+}
 
 /** Column span, which the turn does not change — it is about the wall X axis. */
 function spanColsOf(

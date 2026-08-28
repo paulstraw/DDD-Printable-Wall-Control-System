@@ -27,6 +27,7 @@ import {
   slotRowExtentZ,
   slotSpanHeightMm,
   slots,
+  slotDelta,
 } from '../src/grid'
 
 /** The 16" × 32" panel the grid was recovered from. */
@@ -311,5 +312,42 @@ describe('panelSolids', () => {
     expect(panelSolids(board)).toEqual([
       { x: 12.7, z: 12.7, widthMm: 25.4, heightMm: 25.4 },
     ])
+  })
+})
+
+describe('slotDelta', () => {
+  const at = (x: number, z: number) => ({ x, z })
+
+  it('is zero until the pointer has travelled half a pitch', () => {
+    expect(slotDelta(at(0, 0), at(12.6, 25.3))).toEqual({ dCol: 0, dRow: 0 })
+    expect(slotDelta(at(0, 0), at(-12.6, -25.3))).toEqual({ dCol: 0, dRow: 0 })
+  })
+
+  it('counts a whole pitch on each axis', () => {
+    expect(slotDelta(at(0, 0), at(25.4, 50.8))).toEqual({ dCol: 1, dRow: 1 })
+    expect(slotDelta(at(0, 0), at(-76.2, -152.4))).toEqual({ dCol: -3, dRow: -3 })
+  })
+
+  /*
+   * The whole reason this quantises the difference. Both presses are the
+   * same 2 mm twitch; taking `nearestSlot` at each end would move the one
+   * that began beside a column line and leave the other alone.
+   */
+  it('does not depend on where inside the slot the drag began', () => {
+    const twitch = 2
+    for (const start of [0, 5, 12, 12.6, 20, 25.3]) {
+      expect(slotDelta(at(start, start), at(start + twitch, start + twitch))).toEqual({
+        dCol: 0,
+        dRow: 0,
+      })
+    }
+  })
+
+  it('is antisymmetric, so a drag back where it came from cancels', () => {
+    const from = at(37, 88)
+    const to = at(37 + 63, 88 - 140)
+    const there = slotDelta(from, to)
+    const back = slotDelta(to, from)
+    expect(back).toEqual({ dCol: -there.dCol, dRow: -there.dRow })
   })
 })

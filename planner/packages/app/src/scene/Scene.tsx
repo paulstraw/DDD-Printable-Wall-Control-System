@@ -1,6 +1,6 @@
 import { OrbitControls } from '@react-three/drei'
 import type { Board } from '@ddd-planner/core'
-import { useStore } from '../store'
+import { handsOnWall, useStore } from '../store'
 import { useModifier } from '../useModifier'
 import { DragGhost, DropTarget, Marquee } from './DropTarget'
 import { Pegboard } from './Pegboard'
@@ -17,16 +17,17 @@ function CameraRig({ board }: { board: Board }) {
 export function Scene({ board }: { board: Board }) {
   const centre: [number, number, number] = [board.widthMm / 2, 0, board.heightMm / 2]
   // A drag that crosses the canvas must not also swing the camera — that
-  // goes for a box-select just as much as for a part coming out of the
-  // catalog. A plain wall drag *is* the camera, so it stays enabled.
+  // goes for a box-select and for a part being carried to another slot just
+  // as much as for one coming out of the catalog. A plain wall drag *is* the
+  // camera, so it stays enabled. Which gestures count is `handsOnWall`'s to
+  // say, so a gesture added later cannot be registered here and forgotten
+  // in the other two places that ask the same question.
   //
   // The camera stands down while a modifier is *held*, not once a
   // box-select has started: OrbitControls claims the pointerdown before
   // React can react to it. See useModifier.
   const selecting = useModifier()
-  const busy = useStore(
-    (s) => s.dragging !== null || s.marquee?.selecting === true || s.section.dragging,
-  )
+  const busy = useStore(handsOnWall)
   const background = useStore((s) => s.colors.background)
 
   return (

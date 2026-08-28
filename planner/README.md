@@ -129,6 +129,54 @@ community `Tool_hooks` folder, 2.4% of the library. Two more parts are recorded 
 claims and prints what disagrees. It applies the overrides and reports what remains, so it is a
 regression check rather than a one-off.
 
+### A press on a part has three futures
+
+Parts come off the catalog by dragging, and parts already on the wall move the same way: press
+one and drag, and the whole selection travels with it, snapping slot to slot. Which means a
+press on a part can no longer decide anything on its own — it might be a click, a move, or a
+box-select, and only the release knows which.
+
+So the press only *arms*, and three rules settle it:
+
+- **A part outside the selection joins it immediately**, so a loose bracket is one press away
+  from moving. A part already inside it changes nothing until you let go: collapsing the
+  selection at `pointerdown` is exactly what made this impossible before, since reaching for a
+  six-part joint left you dragging one bracket.
+- **Movement is counted in slots.** `slotDelta` measures from the grab point and rounds
+  the *difference* rather than differencing two `nearestSlot` calls — otherwise grabbing a part
+  a millimetre from a column line would send it a whole column on a twitch. It also means the
+  part keeps its offset from the pointer: a three-column plate grabbed at its right end stays
+  grabbed there.
+- **Held with a modifier, the press starts a band instead**, and the toggle waits to see whether
+  one is swept. Box-selecting used to require finding bare board to start from, which on a full
+  wall is a hunt.
+
+Three more things are less obvious than they look:
+
+- **The whole drag is one undo entry, and a cancelled one is none.** Every frame is written
+  through `withoutHistory`; on release the wall is put back silently and set down again, which
+  is what hands the subscription the moment to keep. Escape restores and records nothing, so
+  ⌘Z afterwards reaches the edit *before* the move rather than landing on an entry that appears
+  to do nothing.
+- **The camera is stood down imperatively, inside the press.** OrbitControls claims the `pointerdown`
+  before React hears about it, so a part dragged across the wall arrived with the view having
+  swung the whole way too, and the delta was measured against a scene moving under it. This is
+  the second place that has needed the same fix — `SectionHandle` was the first, and carries the
+  same comment.
+- **The pointer is followed on `window`, against the wall *plane*.** A mesh stops reporting the
+  moment the pointer leaves it, and a drag leaves it constantly. Reading the ray instead is also
+  what avoids a parallax bug worth naming: the press point taken off the part's own surface,
+  50 mm proud of the board and seen 30° off axis, lands nearly 29 mm from where the cursor
+  actually is — more than a column, so every drag would begin with a jump.
+
+Deliberately not done: Alt-drag to duplicate (⌘C/⌘V already copies a group, and lands it beside
+the original rather than wherever the pointer stopped), and dismissed issues surviving a move.
+Issue ids are built from placement ids with no position in them, so waving away "this bracket has
+nothing to mount to" and then dragging it to another bare slot keeps it quiet. Arrow keys have
+always done that; a drag just makes it easy to reach. Putting position into the id would fix it
+and break the property the whole history design rests on — undo a move and the dismissal would
+not come back with it.
+
 ### Undo remembers moments, not actions
 
 <kbd>⌘Z</kbd> / <kbd>Ctrl+Z</kbd>, with buttons in the header beside Import — which is the
